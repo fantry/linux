@@ -82,13 +82,19 @@ struct pt_regs {
  * On hw interrupt, it's IRQ number:
  */
 	unsigned long orig_ax;
-/* Return frame for iretq */
+
+	/* Return frame for iretq/eretu/erets */
 	unsigned long ip;
-	unsigned long cs;
+	union {
+		unsigned long  csl; /* CS + any fields above it */
+		unsigned short cs;  /* CS selector proper */
+	};
 	unsigned long flags;
 	unsigned long sp;
-	unsigned long ss;
-/* top of stack page */
+	union {
+		unsigned long  ssl; /* SS + any fields above it */
+		unsigned short ss;  /* SS selector proper */
+	};
 };
 
 #endif /* !__i386__ */
