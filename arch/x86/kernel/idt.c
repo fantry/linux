@@ -11,6 +11,7 @@
 #include <asm/desc.h>
 #include <asm/hw_irq.h>
 #include <asm/idtentry.h>
+#include <asm/fred.h>
 
 #define DPL0		0x0
 #define DPL3		0x3
@@ -124,8 +125,47 @@ static const __initconst struct idt_data def_idts[] = {
 };
 
 /*
- * The APIC and SMP idt entries
+ * The APIC and SMP FRED table
  */
+#define SYSV(x,y) [(x) - FIRST_SYSTEM_VECTOR] = (fred_handler)(y)
+
+const fred_handler fred_system_vector_table[NR_SYSTEM_VECTORS] = {
+	[0 ... NR_SYSTEM_VECTORS-1]           = (fred_handler)spurious_interrupt,
+#ifdef CONFIG_SMP
+	SYSV(RESCHEDULE_VECTOR,			sysvec_reschedule_ipi),
+	SYSV(CALL_FUNCTION_VECTOR,		sysvec_call_function),
+	SYSV(CALL_FUNCTION_SINGLE_VECTOR,	sysvec_call_function_single),
+	SYSV(REBOOT_VECTOR,			sysvec_reboot),
+#endif
+
+#ifdef CONFIG_X86_THERMAL_VECTOR
+	SYSV(THERMAL_APIC_VECTOR,		sysvec_thermal),
+#endif
+
+#ifdef CONFIG_X86_MCE_THRESHOLD
+	SYSV(THRESHOLD_APIC_VECTOR,		sysvec_threshold),
+#endif
+
+#ifdef CONFIG_X86_MCE_AMD
+	SYSV(DEFERRED_ERROR_VECTOR,		sysvec_deferred_error),
+#endif
+
+#ifdef CONFIG_X86_LOCAL_APIC
+	SYSV(LOCAL_TIMER_VECTOR,		sysvec_apic_timer_interrupt),
+	SYSV(X86_PLATFORM_IPI_VECTOR,		sysvec_x86_platform_ipi),
+# ifdef CONFIG_HAVE_KVM
+	SYSV(POSTED_INTR_VECTOR,		sysvec_kvm_posted_intr_ipi),
+	SYSV(POSTED_INTR_WAKEUP_VECTOR,		sysvec_kvm_posted_intr_wakeup_ipi),
+	SYSV(POSTED_INTR_NESTED_VECTOR,		sysvec_kvm_posted_intr_nested_ipi),
+# endif
+# ifdef CONFIG_IRQ_WORK
+	SYSV(IRQ_WORK_VECTOR,			sysvec_irq_work),
+# endif
+	SYSV(SPURIOUS_APIC_VECTOR,		sysvec_spurious_apic_interrupt),
+	SYSV(ERROR_APIC_VECTOR,			sysvec_error_interrupt),
+#endif
+};
+
 static const __initconst struct idt_data apic_idts[] = {
 #ifdef CONFIG_SMP
 	INTG(RESCHEDULE_VECTOR,			asm_sysvec_reschedule_ipi),
