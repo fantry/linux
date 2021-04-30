@@ -67,6 +67,7 @@
 #ifdef CONFIG_X86_64
 #include <asm/x86_init.h>
 #include <asm/proto.h>
+#include <asm/fred.h>
 #else
 #include <asm/processor-flags.h>
 #include <asm/setup.h>
@@ -1011,8 +1012,8 @@ static bool notify_debug(struct pt_regs *regs, unsigned long *dr6)
 	return false;
 }
 
-static __always_inline void exc_debug_kernel(struct pt_regs *regs,
-					     unsigned long dr6)
+static __always_inline void
+exc_debug_kernel(struct pt_regs *regs, unsigned long dr6, const bool is_fred)
 {
 	/*
 	 * Disable breakpoints during exception handling; recursive exceptions
@@ -1025,8 +1026,13 @@ static __always_inline void exc_debug_kernel(struct pt_regs *regs,
 	 * Entry text is excluded for HW_BP_X and cpu_entry_area, which
 	 * includes the entry stack is excluded for everything.
 	 */
-	unsigned long dr7 = local_db_save();
-	irqentry_state_t irq_state = irqentry_nmi_enter(regs);
+	unsigned long dr7;
+	irqentry_state_t irq_state;
+
+	if (!is_fred) {
+		dr7 = local_db_save();
+		irq_state = irqentry_nmi_enter(regs);
+	}
 	instrumentation_begin();
 
 	/*
@@ -1053,7 +1059,7 @@ static __always_inline void exc_debug_kernel(struct pt_regs *regs,
 	 * Catch SYSENTER with TF set and clear DR_STEP. If this hit a
 	 * watchpoint at the same time then that will still be handled.
 	 */
-	if ((dr6 & DR_STEP) && is_sysenter_singlestep(regs))
+	if (!is_fred && (dr6 & DR_STEP) && is_sysenter_singlestep(regs))
 		dr6 &= ~DR_STEP;
 
 	/*
@@ -1080,9 +1086,10 @@ static __always_inline void exc_debug_kernel(struct pt_regs *regs,
 		regs->flags &= ~X86_EFLAGS_TF;
 out:
 	instrumentation_end();
-	irqentry_nmi_exit(regs, irq_state);
-
-	local_db_restore(dr7);
+	if (!is_fred) {
+		irqentry_nmi_exit(regs, irq_state);
+		local_db_restore(dr7);
+	}
 }
 
 static __always_inline void exc_debug_user(struct pt_regs *regs,
@@ -1162,7 +1169,7 @@ out:
 /* IST stack entry */
 DEFINE_IDTENTRY_DEBUG(exc_debug)
 {
-	exc_debug_kernel(regs, debug_read_clear_dr6());
+	exc_debug_kernel(regs, debug_read_clear_dr6(), false);
 }
 
 /* User entry, runs on regular task stack */
@@ -1170,6 +1177,24 @@ DEFINE_IDTENTRY_DEBUG_USER(exc_debug)
 {
 	exc_debug_user(regs, debug_read_clear_dr6());
 }
+
+# ifdef CONFIG_X86_FRED
+
+DEFINE_FRED_HANDLER(fred_exc_debug)
+{
+	unsigned long dr6 = fred_info(regs)->aux ^ DR6_RESERVED;
+
+	/* XXX: consider spec change so this isn't needed */
+	set_debugreg(DR6_RESERVED, 6);
+
+	if (user_mode(regs))
+		exc_debug_user(regs, dr6);
+	else
+		exc_debug_kernel(regs, dr6, true);
+}
+
+# endif /* CONFIG_X86_FRED */
+
 #else
 /* 32 bit does not have separate entry points. */
 DEFINE_IDTENTRY_RAW(exc_debug)
@@ -1179,7 +1204,7 @@ DEFINE_IDTENTRY_RAW(exc_debug)
 	if (user_mode(regs))
 		exc_debug_user(regs, dr6);
 	else
-		exc_debug_kernel(regs, dr6);
+		exc_debug_kernel(regs, dr6, false);
 }
 #endif
 
