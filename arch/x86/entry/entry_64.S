@@ -778,19 +778,35 @@ SYM_CODE_END(common_interrupt_return)
 _ASM_NOKPROBE(common_interrupt_return)
 
 /*
- * Reload gs selector with exception handling
+ * Reload gs selector with exception handling. This is used only on
+ * native, so using swapgs, pushf, popf, cli, sti, ... directly is fine.
+ *
  *  di:  new selector
+ * rax:  scratch register
  *
  * Is in entry.text as it shouldn't be instrumented.
+ *
+ * Note: popf is slow, so use pushf to read IF and then execute cli/sti
+ * if necessary.
  */
 SYM_FUNC_START(asm_load_gs_index)
 	FRAME_BEGIN
+	pushf
+	pop	%rax
+	andl	$X86_EFLAGS_IF, %eax	/* Interrupts enabled? */
+	jz	1f
+	cli
+1:
 	swapgs
 .Lgs_change:
 	ANNOTATE_NOENDBR // error_entry
 	movl	%edi, %gs
 2:	ALTERNATIVE "", "mfence", X86_BUG_SWAPGS_FENCE
 	swapgs
+	testl	%eax, %eax
+	jz	3f
+	sti
+3:
 	FRAME_END
 	RET
 
@@ -799,12 +815,12 @@ SYM_FUNC_START(asm_load_gs_index)
 	swapgs					/* switch back to user gs */
 .macro ZAP_GS
 	/* This can't be a string because the preprocessor needs to see it. */
-	movl $__USER_DS, %eax
-	movl %eax, %gs
+	movl $__USER_DS, %edi
+	movl %edi, %gs
 .endm
 	ALTERNATIVE "", "ZAP_GS", X86_BUG_NULL_SEG
-	xorl	%eax, %eax
-	movl	%eax, %gs
+	xorl	%edi, %edi
+	movl	%edi, %gs
 	jmp	2b
 
 	_ASM_EXTABLE(.Lgs_change, .Lbad_gs)
