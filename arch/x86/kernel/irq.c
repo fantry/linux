@@ -250,7 +250,7 @@ DEFINE_IDTENTRY_IRQ(common_interrupt)
 		handle_irq(desc, regs);
 	} else if (IS_ENABLED(CONFIG_SMP) &&
 		   IS_ENABLED(CONFIG_X86_FRED) &&
-		   vector == IRQ_MOVE_CLEANUP_VECTOR) {
+		   vector == IRQ_MOVE_CLEANUP_VECTOR_FRED) {
 		sysvec_irq_move_cleanup(regs);
 	} else {
 		ack_APIC_irq();
@@ -359,7 +359,7 @@ void fixup_irqs(void)
 	 * vector_lock because the cpu is already marked !online, so
 	 * nothing else will touch it.
 	 */
-	for (vector = FIRST_EXTERNAL_VECTOR; vector < NR_VECTORS; vector++) {
+	for (vector = first_external_vector; vector < NR_VECTORS; vector++) {
 		if (IS_ERR_OR_NULL(__this_cpu_read(vector_irq[vector])))
 			continue;
 

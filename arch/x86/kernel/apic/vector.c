@@ -46,6 +46,7 @@ static struct irq_matrix *vector_matrix;
 #ifdef CONFIG_SMP
 static DEFINE_PER_CPU(struct hlist_head, cleanup_list);
 #endif
+unsigned int first_external_vector = FIRST_EXTERNAL_VECTOR_IDT;
 
 void lock_vector_lock(void)
 {
@@ -800,7 +801,12 @@ int __init arch_early_irq_init(void)
 	 * Allocate the vector matrix allocator data structure and limit the
 	 * search area.
 	 */
-	vector_matrix = irq_alloc_matrix(NR_VECTORS, FIRST_EXTERNAL_VECTOR,
+	if (cpu_feature_enabled(X86_FEATURE_FRED))
+		first_external_vector = FIRST_EXTERNAL_VECTOR_FRED;
+	else
+		first_external_vector = FIRST_EXTERNAL_VECTOR_IDT;
+
+	vector_matrix = irq_alloc_matrix(NR_VECTORS, first_external_vector,
 					 FIRST_SYSTEM_VECTOR);
 	BUG_ON(!vector_matrix);
 

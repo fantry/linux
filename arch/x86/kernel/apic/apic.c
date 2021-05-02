@@ -1625,12 +1625,17 @@ static void setup_local_APIC(void)
 	/*
 	 * Set Task Priority to 'accept all except vectors 0-31'.  An APIC
 	 * vector in the 16-31 range could be delivered if TPR == 0, but we
-	 * would think it's an exception and terrible things will happen.  We
-	 * never change this later on.
+	 * would think it's an exception and terrible things will happen,
+	 * unless we are using FRED in which case interrupts and
+	 * exceptions are distinguished by type code.
+	 *
+	 * We never change this later on.
 	 */
+	BUG_ON(!first_external_vector);
+
 	value = apic_read(APIC_TASKPRI);
 	value &= ~APIC_TPRI_MASK;
-	value |= 0x10;
+	value |= (first_external_vector - 0x10) & APIC_TPRI_MASK;
 	apic_write(APIC_TASKPRI, value);
 
 	/* Clear eventually stale ISR/IRR bits */

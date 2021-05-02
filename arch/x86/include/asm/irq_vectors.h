@@ -31,15 +31,23 @@
 
 /*
  * IDT vectors usable for external interrupt sources start at 0x20.
- * (0x80 is the syscall vector, 0x30-0x3f are for ISA)
+ * (0x80 is the syscall vector, 0x30-0x3f are for ISA).
+ *
+ * With FRED we can also use 0x10-0x1f even though those overlap
+ * exception vectors as FRED distinguishes exceptions and interrupts.
+ * Therefore, FIRST_EXTERNAL_VECTOR is no longer a constant.
  */
-#define FIRST_EXTERNAL_VECTOR		0x20
+#define FIRST_EXTERNAL_VECTOR_IDT	0x20
+#define FIRST_EXTERNAL_VECTOR_FRED	0x10
+#define FIRST_EXTERNAL_VECTOR		first_external_vector
 
 /*
  * Reserve the lowest usable vector (and hence lowest priority)  0x20 for
  * triggering cleanup after irq migration. 0x21-0x2f will still be used
  * for device interrupts.
  */
+#define IRQ_MOVE_CLEANUP_VECTOR_IDT	FIRST_EXTERNAL_VECTOR_IDT
+#define IRQ_MOVE_CLEANUP_VECTOR_FRED	FIRST_EXTERNAL_VECTOR_FRED
 #define IRQ_MOVE_CLEANUP_VECTOR		FIRST_EXTERNAL_VECTOR
 
 #define IA32_SYSCALL_VECTOR		0x80
@@ -48,7 +56,7 @@
  * Vectors 0x30-0x3f are used for ISA interrupts.
  *   round up to the next 16-vector boundary
  */
-#define ISA_IRQ_VECTOR(irq)		(((FIRST_EXTERNAL_VECTOR + 16) & ~15) + irq)
+#define ISA_IRQ_VECTOR(irq)		(((FIRST_EXTERNAL_VECTOR_IDT + 16) & ~15) + irq)
 
 /*
  * Special IRQ vectors used by the SMP architecture, 0xf0-0xff
@@ -114,7 +122,6 @@
 #define FIRST_SYSTEM_VECTOR		NR_VECTORS
 #endif
 
-#define NR_EXTERNAL_VECTORS		(FIRST_SYSTEM_VECTOR - FIRST_EXTERNAL_VECTOR)
 #define NR_SYSTEM_VECTORS		(NR_VECTORS - FIRST_SYSTEM_VECTOR)
 
 /*

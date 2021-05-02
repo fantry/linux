@@ -496,8 +496,8 @@ __visible noinstr void func(struct pt_regs *regs,			\
  */
 	.align IDT_ALIGN
 SYM_CODE_START(irq_entries_start)
-    vector=FIRST_EXTERNAL_VECTOR
-    .rept NR_EXTERNAL_VECTORS
+    vector=FIRST_EXTERNAL_VECTOR_IDT
+    .rept FIRST_SYSTEM_VECTOR - FIRST_EXTERNAL_VECTOR_IDT
 	UNWIND_HINT_IRET_REGS
 0 :
 	ENDBR

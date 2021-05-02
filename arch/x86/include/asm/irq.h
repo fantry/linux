@@ -12,6 +12,11 @@
 #include <asm/irq_vectors.h>
 
 /*
+ * The first available IRQ vector
+ */
+extern unsigned int __ro_after_init first_external_vector;
+
+/*
  * The irq entry code is in the noinstr section and the start/end of
  * __irqentry_text is emitted via labels. Make the build fail if
  * something moves a C function into the __irq_entry section.

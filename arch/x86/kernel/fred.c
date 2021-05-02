@@ -191,7 +191,7 @@ void __init fred_setup_apic(void)
 {
 	int i;
 
-	for (i = 0; i < FIRST_EXTERNAL_VECTOR; i++)
+	for (i = 0; i < FIRST_EXTERNAL_VECTOR_FRED; i++)
 		set_bit(i, system_vectors);
 
 	/*
@@ -200,7 +200,7 @@ void __init fred_setup_apic(void)
 	 * /proc/interrupts.
 	 */
 #ifdef CONFIG_SMP
-	set_bit(IRQ_MOVE_CLEANUP_VECTOR, system_vectors);
+	set_bit(IRQ_MOVE_CLEANUP_VECTOR_FRED, system_vectors);
 #endif
 
 	for (i = 0; i < NR_SYSTEM_VECTORS; i++) {
