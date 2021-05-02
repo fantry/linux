@@ -147,6 +147,20 @@ DECLARE_FRED_HANDLER(fred_exc_page_fault);
 
 extern const fred_handler fred_system_vector_table[NR_SYSTEM_VECTORS];
 
+/*
+ * The actual assembly entry and exit points
+ */
+extern __visible void fred_entrypoint_user(void);
+extern __visible void fred_exit_user(void);
+extern __visible void fred_entrypoint_kernel(void);
+extern __visible void fred_exit_kernel(void);
+
+/*
+ * Initialization
+ */
+void cpu_init_fred_exceptions(void);
+void fred_setup_apic(void);
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* CONFIG_X86_FRED */

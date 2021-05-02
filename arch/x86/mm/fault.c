@@ -1494,9 +1494,8 @@ handle_page_fault(struct pt_regs *regs, unsigned long error_code,
 	}
 }
 
-static __always_inline void page_fault_common(struct pt_regs *regs,
-					      unsigned int error_code,
-					      unsigned long address)
+static void page_fault_common(struct pt_regs *regs, unsigned int error_code,
+			      unsigned long address)
 {
 	irqentry_state_t state;
 
