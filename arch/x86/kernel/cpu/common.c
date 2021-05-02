@@ -2219,7 +2219,7 @@ void cpu_init_exception_handling(void)
 	/* GHCB needs to be setup to handle #VC. */
 	setup_ghcb();
 
-	if (cpu_feature_enabled(CONFIG_X86_FRED)) {
+	if (cpu_feature_enabled(X86_FEATURE_FRED)) {
 		/* Set up FRED exception handling */
 		cpu_init_fred_exceptions();
 	} else {

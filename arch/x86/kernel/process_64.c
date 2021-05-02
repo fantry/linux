@@ -524,7 +524,7 @@ start_thread_common(struct pt_regs *regs, unsigned long new_ip,
 
 	regs->ip    = new_ip;
 	regs->sp    = new_sp;
-	regs->csl   = _cs | FRED_CSL_ENABLE_NMI | FRED_CSL_ALLOW_SINGLE_STEP;
+	regs->csl   = _cs | CSL_PROCESS_START;
 	regs->ssl   = _ss;
 	regs->flags = X86_EFLAGS_IF | X86_EFLAGS_FIXED;
 }

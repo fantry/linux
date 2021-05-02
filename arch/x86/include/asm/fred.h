@@ -84,6 +84,9 @@
 #define FRED_CSL_ALLOW_SINGLE_STEP	_BITUL(17)
 #define FRED_CSL_INTERRUPT_SHADOW	_BITUL(18)
 
+#define CSL_PROCESS_START \
+	(FRED_CSL_ENABLE_NMI | FRED_CSL_ALLOW_SINGLE_STEP)
+
 #ifndef __ASSEMBLY__
 
 #include <linux/kernel.h>
@@ -162,6 +165,13 @@ void cpu_init_fred_exceptions(void);
 void fred_setup_apic(void);
 
 #endif /* __ASSEMBLY__ */
+
+#else
+
+#define cpu_init_fred_exceptions() BUG()
+#define fred_setup_apic() BUG()
+
+#define CSL_PROCESS_START 0
 
 #endif /* CONFIG_X86_FRED */
 

@@ -248,10 +248,10 @@ DEFINE_IDTENTRY_IRQ(common_interrupt)
 	desc = __this_cpu_read(vector_irq[vector]);
 	if (likely(!IS_ERR_OR_NULL(desc))) {
 		handle_irq(desc, regs);
-	} else if (IS_ENABLED(CONFIG_SMP) &&
-		   IS_ENABLED(CONFIG_X86_FRED) &&
-		   vector == IRQ_MOVE_CLEANUP_VECTOR_FRED) {
+#if defined(CONFIG_X86_FRED) && defined(CONFIG_SMP)
+	} else if (vector == IRQ_MOVE_CLEANUP_VECTOR_FRED) {
 		sysvec_irq_move_cleanup(regs);
+#endif
 	} else {
 		ack_APIC_irq();
 

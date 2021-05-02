@@ -127,6 +127,8 @@ static const __initconst struct idt_data def_idts[] = {
 /*
  * The APIC and SMP FRED table
  */
+#ifdef CONFIG_X86_FRED
+
 #define SYSV(x,y) [(x) - FIRST_SYSTEM_VECTOR] = (fred_handler)(y)
 
 const fred_handler fred_system_vector_table[NR_SYSTEM_VECTORS] = {
@@ -165,6 +167,8 @@ const fred_handler fred_system_vector_table[NR_SYSTEM_VECTORS] = {
 	SYSV(ERROR_APIC_VECTOR,			sysvec_error_interrupt),
 #endif
 };
+
+#endif /* CONFIG_X86_FRED */
 
 static const __initconst struct idt_data apic_idts[] = {
 #ifdef CONFIG_SMP
