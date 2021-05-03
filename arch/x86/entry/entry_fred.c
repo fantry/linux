@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * arch/x86/entry/fred_entry.c
+ * arch/x86/entry/entry_fred.c
  *
  * This contains the dispatch functions called from the entry point
  * assembly. These need to be in a separate file from the
