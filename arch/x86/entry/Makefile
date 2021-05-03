@@ -17,7 +17,8 @@ obj-y				+= common.o
 obj-y				+= vdso/
 obj-y				+= vsyscall/
 
-CFLAGS_entry_fred.o		+= -fno-stack-protector -fomit-frame-pointer
+CFLAGS_entry_fred.o		+= -fno-stack-protector -fomit-frame-pointer \
+				   -ffixed-rax
 CFLAGS_REMOVE_entry_fred.o	+= -pg $(CC_FLAGS_FTRACE)
 obj-$(CONFIG_X86_FRED)		+= entry_64_fred.o entry_fred.o
 

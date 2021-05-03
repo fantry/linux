@@ -28,6 +28,13 @@ register unsigned long r13 asm("%r13");
 register unsigned long r14 asm("%r14");
 register unsigned long r15 asm("%r15");
 
+/*
+ * For extra speed, this is held with the entry value, as does the
+ * legacy entry code. It is also typically the first choice for a
+ * register for gcc to clobber.
+ */
+register unsigned long rax asm("%rax");
+
 #define zap_register(x)						\
 	do {							\
 		register long x asm("%" #x) = 0;		\
@@ -45,7 +52,6 @@ static __always_inline void zap_registers(struct pt_regs *regs)
 	r15 = 0;
 
 	/* Clobbered registers */
-	zap_register(rax);
 	zap_register(rcx);
 	zap_register(rdx);
 	zap_register(rsi);
@@ -70,28 +76,25 @@ __visible noinstr void fred_entry_from_user(struct pt_regs *regs)
 		[EXTYPE_PRIVSW]   = fred_exception,
 		[EXTYPE_SYSCALL]  = fred_syscall_slow
 	};
-	unsigned long orig_ax;
 	const struct fred_info * const fi = fred_info(regs);
 
 	zap_registers(regs);
 
 	/* The pt_regs frame on entry here is correct for a system call. */
 
-	orig_ax = regs->orig_ax;
-
 	if (likely(fi->type == EXTYPE_SYSCALL &&
 		   fi->vector == FRED_SYSCALL)) {
-		do_syscall_64(regs, orig_ax);
+		do_syscall_64(regs, rax);
 	} else if (likely(IS_ENABLED(CONFIG_IA32_EMULATION) &&
 			  fi->type == EXTYPE_SWINT &&
 			  fi->vector == IA32_SYSCALL_VECTOR)) {
-		do_int80_syscall_32(regs);
+		do_int80_syscall_32(regs); /* + rax? */
 	} else {
 		/* Not a system call */
 		unsigned int errcode, vector, type;
 
 		/* Convert frame to an exception frame */
-		regs->ax = orig_ax;
+		regs->ax = rax;
 		regs->orig_ax = -1;
 
 		errcode = fi->errcode;
