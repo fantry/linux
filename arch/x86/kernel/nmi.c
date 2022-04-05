@@ -555,7 +555,9 @@ DEFINE_FRED_HANDLER(fred_exc_nmi)
 	irqentry_nmi_exit(regs, irq_state);
 }
 
-#endif
+#endif /* CONFIG_X86_FRED */
+
+#endif /* IS_MODULE(CONFIG_KVM_INTEL) */
 
 void stop_nmi(void)
 {

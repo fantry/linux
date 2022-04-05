@@ -35,7 +35,7 @@ static inline void native_load_gs_index(unsigned int selector)
 		       "	jmp 2b\n"
 		       ".popsection\n"
 		       _ASM_EXTABLE(1b, 3b),
-		       _ASM_NOP_DS_PREFIX LKGS_DI,
+		       _ASM_BYTES(0x3e) LKGS_DI,
 		       X86_FEATURE_LKGS,
 		       ASM_OUTPUT2([sel] "+D" (sel), ASM_CALL_CONSTRAINT),
 		       ASM_NO_INPUT_CLOBBER(_ASM_AX));
