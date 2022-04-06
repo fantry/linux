@@ -34,7 +34,7 @@ SYM_INNER_LABEL(fred_exit_user, SYM_L_GLOBAL)
 	ERETU
 SYM_CODE_END(fred_entrypoint_user)
 
-	.org fred_entrypoint_user+64
+	.org fred_entrypoint_user+256
 SYM_CODE_START_NOALIGN(fred_entrypoint_kernel)
         UNWIND_HINT_EMPTY
 	/* No system calls: exception stack frame */
