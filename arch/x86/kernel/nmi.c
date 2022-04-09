@@ -534,7 +534,7 @@ DEFINE_IDTENTRY_RAW(exc_nmi_noist)
 	exc_nmi(regs);
 }
 #endif
-#if IS_MODULE(CONFIG_KVM_INTEL)
+#if IS_ENABLED(CONFIG_KVM_INTEL)
 EXPORT_SYMBOL_GPL(asm_exc_nmi_noist);
 
 #ifdef CONFIG_X86_FRED
@@ -557,7 +557,7 @@ DEFINE_FRED_HANDLER(fred_exc_nmi)
 
 #endif /* CONFIG_X86_FRED */
 
-#endif /* IS_MODULE(CONFIG_KVM_INTEL) */
+#endif /* IS_ENABLED(CONFIG_KVM_INTEL) */
 
 void stop_nmi(void)
 {
