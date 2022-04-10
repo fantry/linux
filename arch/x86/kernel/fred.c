@@ -158,6 +158,7 @@ void cpu_init_fred_exceptions(void)
 	       FRED_CONFIG_INT_STKLVL(0));
 
 	wrmsrl(MSR_IA32_FRED_STKLVLS,
+	       FRED_STKLVL(X86_TRAP_DB,  1) |
 	       FRED_STKLVL(X86_TRAP_NMI, 2) |
 	       FRED_STKLVL(X86_TRAP_MC,  2) |
 	       FRED_STKLVL(X86_TRAP_DF,  3));
