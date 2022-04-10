@@ -23,12 +23,12 @@
 	.align 4096
 
 SYM_CODE_START_NOALIGN(fred_entrypoint_user)
-        UNWIND_HINT_EMPTY
+	UNWIND_HINT_EMPTY
 	/* Stack frame optimized for system calls */
 	pushq	%rax		/* orig_ax: system call number */
 	PUSH_REGS rax=$-ENOSYS
 	movq	%rsp, %rdi	/* %rdi -> pt_regs */
-        call	fred_entry_from_user
+	call	fred_entry_from_user
 SYM_INNER_LABEL(fred_exit_user, SYM_L_GLOBAL)
 	FRED_EXIT
 	ERETU
@@ -36,7 +36,7 @@ SYM_CODE_END(fred_entrypoint_user)
 
 	.org fred_entrypoint_user+256
 SYM_CODE_START_NOALIGN(fred_entrypoint_kernel)
-        UNWIND_HINT_EMPTY
+	UNWIND_HINT_EMPTY
 	/* No system calls: exception stack frame */
 	pushq	$-1		/* orig_ax: not a system call */
 	PUSH_REGS
