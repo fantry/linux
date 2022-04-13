@@ -148,6 +148,8 @@ DECLARE_FRED_HANDLER(fred_exc_debug);
 DECLARE_FRED_HANDLER(fred_exc_nmi);
 DECLARE_FRED_HANDLER(fred_exc_page_fault);
 
+extern asmlinkage void asm_fred_handle_external_event(unsigned int vector);
+
 extern const fred_handler fred_system_vector_table[NR_SYSTEM_VECTORS];
 
 /*

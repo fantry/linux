@@ -16,6 +16,7 @@
 #include <asm/fred.h>
 #include <asm/ptrace.h>
 #include <asm/syscall.h>
+#include <asm/trapnr.h>
 
 /*
  * Caller-saved registers as global register variables so we can
@@ -133,4 +134,18 @@ __visible noinstr void fred_entry_from_kernel(struct pt_regs *regs)
 
 	type = array_index_nospec(type, FRED_EXTYPE_COUNT);
 	kernel_handlers[type](regs, errcode, vector);
+}
+
+__visible noinstr void fred_handle_external_event(struct pt_regs *regs,
+						  unsigned int vector)
+{
+	if (vector == NMI_VECTOR)
+		return fred_exc_nmi(regs, 0, vector);
+
+	if (vector >= 0 && vector < FIRST_EXTERNAL_VECTOR_FRED) {
+		pr_emerg("PANIC: sync event with vector %u NOT expected", vector);
+		return fred_bad_event(regs, 0, vector);
+	}
+
+	fred_hw_interrupt(regs, 0, vector);
 }

@@ -7,6 +7,7 @@
 #include <linux/linkage.h>
 #include <asm/errno.h>
 #include <asm/asm-offsets.h>
+#include <asm/export.h>
 #include <asm/fred.h>
 
 #include "calling.h"
@@ -46,3 +47,15 @@ SYM_INNER_LABEL(fred_exit_kernel, SYM_L_GLOBAL)
 	FRED_EXIT
 	ERETS
 SYM_CODE_END(fred_entrypoint_kernel)
+
+SYM_FUNC_START(asm_fred_handle_external_event)
+	pushq	$-1		/* Drop orig_ax */
+	PUSH_REGS
+	movq	%rsp, %rdi	/* %rdi -> pt_regs */
+	/* %rsi -> vector */
+	call fred_handle_external_event
+	POP_REGS
+	addq $8,%rsp		/* Drop orig_ax */
+	ret
+SYM_FUNC_END(asm_fred_handle_external_event)
+EXPORT_SYMBOL(asm_fred_handle_external_event)
