@@ -101,7 +101,7 @@ DEFINE_FRED_HANDLER(fred_exception)
 		[X86_TRAP_DB] = fred_exc_debug,
 		[X86_TRAP_DF] = (fred_handler)exc_double_fault,
 #ifdef CONFIG_AMD_MEM_ENCRYPT
-		[X86_TRAP_VC] = (fred_handler)exc_vmm_communication,
+		[X86_TRAP_VC] = (fred_handler)asm_exc_vmm_communication,
 #endif
 	};
 
