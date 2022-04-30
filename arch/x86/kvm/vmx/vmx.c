@@ -633,6 +633,8 @@ static bool is_valid_passthrough_msr(u32 msr)
 	case MSR_LBR_CORE_TO ... MSR_LBR_CORE_TO + 8:
 		/* LBR MSRs. These are handled in vmx_update_intercept_for_lbr_msrs() */
 		return true;
+	case MSR_SYSCALL_MASK:
+		return cpu_has_ia32_fred();
 	}
 
 	r = possible_passthrough_msr_slot(msr) != -ENOENT;
@@ -1311,6 +1313,22 @@ static void vmx_write_guest_kernel_gs_base(struct vcpu_vmx *vmx, u64 data)
 }
 #endif
 
+static inline void vmx_vcpu_load_host_fred_config(void)
+{
+	if (!cpu_has_ia32_fred())
+		return;
+
+	vmcs_write64(HOST_IA32_FRED_CONFIG, read_msr(MSR_IA32_FRED_CONFIG));
+	vmcs_write64(HOST_IA32_FRED_RSP1, read_msr(MSR_IA32_FRED_RSP1));
+	vmcs_write64(HOST_IA32_FRED_RSP2, read_msr(MSR_IA32_FRED_RSP2));
+	vmcs_write64(HOST_IA32_FRED_RSP3, read_msr(MSR_IA32_FRED_RSP3));
+	vmcs_write64(HOST_IA32_FRED_STKLVLS, read_msr(MSR_IA32_FRED_STKLVLS));
+	vmcs_write64(HOST_IA32_FRED_SSP1, read_msr(MSR_IA32_FRED_SSP1));
+	vmcs_write64(HOST_IA32_FRED_SSP2, read_msr(MSR_IA32_FRED_SSP2));
+	vmcs_write64(HOST_IA32_FRED_SSP3, read_msr(MSR_IA32_FRED_SSP3));
+	vmcs_write64(HOST_IA32_FMASK, read_msr(MSR_SYSCALL_MASK));
+}
+
 void vmx_vcpu_load_vmcs(struct kvm_vcpu *vcpu, int cpu,
 			struct loaded_vmcs *buddy)
 {
@@ -1365,6 +1383,8 @@ void vmx_vcpu_load_vmcs(struct kvm_vcpu *vcpu, int cpu,
 		vmcs_writel(HOST_TR_BASE,
 			    (unsigned long)&get_cpu_entry_area(cpu)->tss.x86_tss);
 		vmcs_writel(HOST_GDTR_BASE, (unsigned long)gdt);   /* 22.2.4 */
+
+		vmx_vcpu_load_host_fred_config();
 
 		if (IS_ENABLED(CONFIG_IA32_EMULATION) || IS_ENABLED(CONFIG_X86_32)) {
 			/* 22.2.3 */
@@ -1747,7 +1767,8 @@ static void vmx_setup_uret_msrs(struct vcpu_vmx *vmx)
 
 	vmx_setup_uret_msr(vmx, MSR_STAR, load_syscall_msrs);
 	vmx_setup_uret_msr(vmx, MSR_LSTAR, load_syscall_msrs);
-	vmx_setup_uret_msr(vmx, MSR_SYSCALL_MASK, load_syscall_msrs);
+	if (!cpu_has_ia32_fred())
+		vmx_setup_uret_msr(vmx, MSR_SYSCALL_MASK, load_syscall_msrs);
 #endif
 	vmx_setup_uret_msr(vmx, MSR_EFER, update_transition_efer(vmx));
 
@@ -2499,6 +2520,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
 	u32 _cpu_based_exec_control = 0;
 	u32 _cpu_based_2nd_exec_control = 0;
 	u32 _vmexit_control = 0;
+	u64 _vmexit_2nd_control = 0;
 	u32 _vmentry_control = 0;
 
 	memset(vmcs_conf, 0, sizeof(*vmcs_conf));
@@ -2602,10 +2624,19 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
 	      VM_EXIT_LOAD_IA32_EFER |
 	      VM_EXIT_CLEAR_BNDCFGS |
 	      VM_EXIT_PT_CONCEAL_PIP |
-	      VM_EXIT_CLEAR_IA32_RTIT_CTL;
+	      VM_EXIT_CLEAR_IA32_RTIT_CTL |
+	      VM_EXIT_ACTIVATE_SECONDARY_CONTROLS;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_EXIT_CTLS,
 				&_vmexit_control) < 0)
 		return -EIO;
+
+	if (_vmexit_control & VM_EXIT_ACTIVATE_SECONDARY_CONTROLS) {
+		_vmexit_2nd_control = read_msr(MSR_IA32_VMX_EXIT_CTLS2);
+		if (cpu_feature_enabled(X86_FEATURE_FRED) &&
+		    !(_vmexit_2nd_control & SECONDARY_VM_EXIT_SAVE_IA32_FRED &&
+		      _vmexit_2nd_control & SECONDARY_VM_EXIT_LOAD_IA32_FRED))
+			return -EIO;
+	}
 
 	min = PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING;
 	opt = PIN_BASED_VIRTUAL_NMIS | PIN_BASED_POSTED_INTR |
@@ -2626,9 +2657,15 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
 	      VM_ENTRY_LOAD_IA32_EFER |
 	      VM_ENTRY_LOAD_BNDCFGS |
 	      VM_ENTRY_PT_CONCEAL_PIP |
-	      VM_ENTRY_LOAD_IA32_RTIT_CTL;
+	      VM_ENTRY_LOAD_IA32_RTIT_CTL |
+	      VM_ENTRY_LOAD_IA32_FRED;
 	if (adjust_vmx_controls(min, opt, MSR_IA32_VMX_ENTRY_CTLS,
 				&_vmentry_control) < 0)
+		return -EIO;
+
+	/* Make sure guest FRED MSRs not clobbered by host FRED MSRs */
+	if (cpu_feature_enabled(X86_FEATURE_FRED) &&
+	    !(_vmentry_control & VM_ENTRY_LOAD_IA32_FRED))
 		return -EIO;
 
 	/*
@@ -2680,6 +2717,7 @@ static __init int setup_vmcs_config(struct vmcs_config *vmcs_conf,
 	vmcs_conf->cpu_based_exec_ctrl = _cpu_based_exec_control;
 	vmcs_conf->cpu_based_2nd_exec_ctrl = _cpu_based_2nd_exec_control;
 	vmcs_conf->vmexit_ctrl         = _vmexit_control;
+	vmcs_conf->vmexit_2nd_ctrl     = _vmexit_2nd_control;
 	vmcs_conf->vmentry_ctrl        = _vmentry_control;
 
 #if IS_ENABLED(CONFIG_HYPERV)
@@ -4507,6 +4545,10 @@ static void init_vmcs(struct vcpu_vmx *vmx)
 
 	vm_exit_controls_set(vmx, vmx_vmexit_ctrl());
 
+	/* CPU has FRED, then it must have secondary VM exit controls. */
+	if (cpu_has_ia32_fred())
+		vmcs_write64(SECONDARY_VM_EXIT_CONTROLS, vmcs_config.vmexit_2nd_ctrl);
+
 	/* 22.2.1, 20.8.1 */
 	vm_entry_controls_set(vmx, vmx_vmentry_ctrl());
 
@@ -4621,6 +4663,22 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 
 	vmcs_writel(GUEST_IDTR_BASE, 0);
 	vmcs_write32(GUEST_IDTR_LIMIT, 0xffff);
+
+	/*
+	 * Guest may or may NOT enable FRED, anyway we
+	 * should always reset guest FRED config MSRs
+	 */
+	if (cpu_has_ia32_fred()) {
+		vmcs_write64(GUEST_IA32_FRED_CONFIG, 0);
+		vmcs_write64(GUEST_IA32_FRED_RSP1, 0);
+		vmcs_write64(GUEST_IA32_FRED_RSP2, 0);
+		vmcs_write64(GUEST_IA32_FRED_RSP3, 0);
+		vmcs_write64(GUEST_IA32_FRED_STKLVLS, 0);
+		vmcs_write64(GUEST_IA32_FRED_SSP1, 0);
+		vmcs_write64(GUEST_IA32_FRED_SSP2, 0);
+		vmcs_write64(GUEST_IA32_FRED_SSP3, 0);
+		vmcs_write64(GUEST_IA32_FMASK, 0);
+	}
 
 	vmcs_write32(GUEST_ACTIVITY_STATE, GUEST_ACTIVITY_ACTIVE);
 	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0);
@@ -7142,6 +7200,8 @@ static int vmx_vcpu_create(struct kvm_vcpu *vcpu)
 	vmx_disable_intercept_for_msr(vcpu, MSR_FS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_GS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_KERNEL_GS_BASE, MSR_TYPE_RW);
+	if (cpu_has_ia32_fred())
+		vmx_disable_intercept_for_msr(vcpu, MSR_SYSCALL_MASK, MSR_TYPE_RW);
 #endif
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_CS, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_ESP, MSR_TYPE_RW);

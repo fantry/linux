@@ -60,6 +60,7 @@ struct vmcs_config {
 	u32 cpu_based_exec_ctrl;
 	u32 cpu_based_2nd_exec_ctrl;
 	u32 vmexit_ctrl;
+	u64 vmexit_2nd_ctrl;
 	u32 vmentry_ctrl;
 	struct nested_vmx_msrs nested;
 };
@@ -129,6 +130,12 @@ static inline bool cpu_has_secondary_exec_ctrls(void)
 {
 	return vmcs_config.cpu_based_exec_ctrl &
 		CPU_BASED_ACTIVATE_SECONDARY_CONTROLS;
+}
+
+static inline bool cpu_has_secondary_vmexit_ctrls(void)
+{
+	return vmcs_config.vmexit_ctrl &
+		VM_EXIT_ACTIVATE_SECONDARY_CONTROLS;
 }
 
 static inline bool cpu_has_vmx_virtualize_apic_accesses(void)
@@ -415,6 +422,13 @@ static inline u64 vmx_supported_debugctl(void)
 		debugctl |= DEBUGCTLMSR_LBR_MASK;
 
 	return debugctl;
+}
+
+static inline bool cpu_has_ia32_fred(void)
+{
+	return (vmcs_config.vmentry_ctrl & VM_ENTRY_LOAD_IA32_FRED) &&
+	       (vmcs_config.vmexit_2nd_ctrl & SECONDARY_VM_EXIT_SAVE_IA32_FRED) &&
+	       (vmcs_config.vmexit_2nd_ctrl & SECONDARY_VM_EXIT_LOAD_IA32_FRED);
 }
 
 #endif /* __KVM_X86_VMX_CAPS_H */
