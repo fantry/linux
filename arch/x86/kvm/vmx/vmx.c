@@ -633,7 +633,18 @@ static bool is_valid_passthrough_msr(u32 msr)
 	case MSR_LBR_CORE_TO ... MSR_LBR_CORE_TO + 8:
 		/* LBR MSRs. These are handled in vmx_update_intercept_for_lbr_msrs() */
 		return true;
+	case MSR_IA32_FRED_CONFIG:
+	case MSR_IA32_FRED_STKLVLS:
+	case MSR_IA32_FRED_RSP0:
+	case MSR_IA32_FRED_RSP1:
+	case MSR_IA32_FRED_RSP2:
+	case MSR_IA32_FRED_RSP3:
+	case MSR_IA32_FRED_SSP0:
+	case MSR_IA32_FRED_SSP1:
+	case MSR_IA32_FRED_SSP2:
+	case MSR_IA32_FRED_SSP3:
 	case MSR_SYSCALL_MASK:
+		/* These MSRs are in VMCS with CPUs having FRED support */
 		return cpu_has_ia32_fred();
 	}
 
@@ -1243,6 +1254,15 @@ void vmx_prepare_switch_to_guest(struct kvm_vcpu *vcpu)
 	}
 
 	wrmsrl(MSR_KERNEL_GS_BASE, vmx->msr_guest_kernel_gs_base);
+
+#ifdef CONFIG_X86_FRED
+	if (cpu_has_ia32_fred()) {
+		rdmsrl(MSR_IA32_FRED_RSP0, vmx->msr_host_fred_rsp0);
+		wrmsrl(MSR_IA32_FRED_RSP0, vmx->msr_guest_fred_rsp0);
+		rdmsrl(MSR_IA32_FRED_SSP0, vmx->msr_host_fred_ssp0);
+		wrmsrl(MSR_IA32_FRED_SSP0, vmx->msr_guest_fred_ssp0);
+	}
+#endif
 #else
 	savesegment(fs, fs_sel);
 	savesegment(gs, gs_sel);
@@ -1267,6 +1287,12 @@ static void vmx_prepare_switch_to_host(struct vcpu_vmx *vmx)
 
 #ifdef CONFIG_X86_64
 	rdmsrl(MSR_KERNEL_GS_BASE, vmx->msr_guest_kernel_gs_base);
+#ifdef CONFIG_X86_FRED
+	if (cpu_has_ia32_fred()) {
+		rdmsrl(MSR_IA32_FRED_RSP0, vmx->msr_guest_fred_rsp0);
+		rdmsrl(MSR_IA32_FRED_SSP0, vmx->msr_guest_fred_ssp0);
+	}
+#endif
 #endif
 	if (host_state->ldt_sel || (host_state->gs_sel & 7)) {
 		kvm_load_ldt(host_state->ldt_sel);
@@ -1287,6 +1313,12 @@ static void vmx_prepare_switch_to_host(struct vcpu_vmx *vmx)
 	invalidate_tss_limit();
 #ifdef CONFIG_X86_64
 	wrmsrl(MSR_KERNEL_GS_BASE, vmx->msr_host_kernel_gs_base);
+#ifdef CONFIG_X86_FRED
+	if (cpu_has_ia32_fred()) {
+		wrmsrl(MSR_IA32_FRED_RSP0, vmx->msr_host_fred_rsp0);
+		wrmsrl(MSR_IA32_FRED_SSP0, vmx->msr_host_fred_ssp0);
+	}
+#endif
 #endif
 	load_fixmap_gdt(raw_smp_processor_id());
 	vmx->guest_state_loaded = false;
@@ -7200,8 +7232,19 @@ static int vmx_vcpu_create(struct kvm_vcpu *vcpu)
 	vmx_disable_intercept_for_msr(vcpu, MSR_FS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_GS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_KERNEL_GS_BASE, MSR_TYPE_RW);
-	if (cpu_has_ia32_fred())
+	if (cpu_has_ia32_fred()) {
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_CONFIG, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_STKLVLS, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_RSP0, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_RSP1, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_RSP2, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_RSP3, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_SSP0, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_SSP1, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_SSP2, MSR_TYPE_RW);
+		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_SSP3, MSR_TYPE_RW);
 		vmx_disable_intercept_for_msr(vcpu, MSR_SYSCALL_MASK, MSR_TYPE_RW);
+	}
 #endif
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_CS, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_ESP, MSR_TYPE_RW);

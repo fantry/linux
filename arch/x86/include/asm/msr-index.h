@@ -46,6 +46,7 @@
 #define MSR_IA32_FRED_RSP1	0x1cd /* Level 1 stack pointer */
 #define MSR_IA32_FRED_RSP2	0x1ce /* Level 2 stack pointer */
 #define MSR_IA32_FRED_RSP3	0x1cf /* Level 3 stack pointer */
+#define MSR_IA32_FRED_SSP0	MSR_IA32_PL0_SSP /* Level 0 shadow stack pointer */
 #define MSR_IA32_FRED_SSP1	0x1d1 /* Level 1 shadow stack pointer */
 #define MSR_IA32_FRED_SSP2	0x1d2 /* Level 2 shadow stack pointer */
 #define MSR_IA32_FRED_SSP3	0x1d3 /* Level 3 shadow stack pointer */
