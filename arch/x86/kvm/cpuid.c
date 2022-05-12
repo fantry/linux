@@ -295,6 +295,16 @@ static void kvm_vcpu_after_set_cpuid(struct kvm_vcpu *vcpu)
 		kvm_apic_set_version(vcpu);
 	}
 
+	if (cpu_feature_enabled(X86_FEATURE_FRED)) {
+		best = kvm_find_cpuid_entry(vcpu, 7, 0);
+		if (best) {
+			best->eax = max(best->eax, 1u);
+			best = kvm_find_cpuid_entry(vcpu, 7, 1);
+			if (best)
+				best->eax |= F(FRED) | F(LKGS);
+		}
+	}
+
 	guest_supported_xcr0 =
 		cpuid_get_supported_xcr0(vcpu->arch.cpuid_entries, vcpu->arch.cpuid_nent);
 
@@ -604,7 +614,7 @@ void kvm_set_cpu_caps(void)
 		kvm_cpu_cap_set(X86_FEATURE_SPEC_CTRL_SSBD);
 
 	kvm_cpu_cap_mask(CPUID_7_1_EAX,
-		F(AVX_VNNI) | F(AVX512_BF16)
+		F(AVX_VNNI) | F(AVX512_BF16) | F(FRED) | F(LKGS)
 	);
 
 	kvm_cpu_cap_mask(CPUID_D_1_EAX,
