@@ -1182,7 +1182,7 @@ DEFINE_IDTENTRY_DEBUG_USER(exc_debug)
 
 DEFINE_FRED_HANDLER(fred_exc_debug)
 {
-	unsigned long dr6 = fred_info(regs)->aux ^ DR6_RESERVED;
+	unsigned long dr6 = fred_info(regs)->aux;
 
 	/* XXX: consider spec change so this isn't needed */
 	set_debugreg(DR6_RESERVED, 6);
