@@ -528,17 +528,7 @@ nmi_restart:
 		mds_user_clear_cpu_buffers();
 }
 
-#if defined(CONFIG_X86_64) && IS_ENABLED(CONFIG_KVM_INTEL)
-DEFINE_IDTENTRY_RAW(exc_nmi_noist)
-{
-	exc_nmi(regs);
-}
-#endif
-#if IS_ENABLED(CONFIG_KVM_INTEL)
-EXPORT_SYMBOL_GPL(asm_exc_nmi_noist);
-
 #ifdef CONFIG_X86_FRED
-
 DEFINE_FRED_HANDLER(fred_exc_nmi)
 {
 	/*
@@ -554,10 +544,7 @@ DEFINE_FRED_HANDLER(fred_exc_nmi)
 
 	irqentry_nmi_exit(regs, irq_state);
 }
-
 #endif /* CONFIG_X86_FRED */
-
-#endif /* IS_ENABLED(CONFIG_KVM_INTEL) */
 
 void stop_nmi(void)
 {
