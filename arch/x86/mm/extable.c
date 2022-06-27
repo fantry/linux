@@ -6,6 +6,7 @@
 #include <xen/xen.h>
 
 #include <asm/fpu/api.h>
+#include <asm/fred.h>
 #include <asm/sev.h>
 #include <asm/traps.h>
 #include <asm/kdebug.h>
@@ -140,6 +141,19 @@ static bool ex_handler_ucopy_len(const struct exception_table_entry *fixup,
 	return ex_handler_uaccess(fixup, regs, trapnr);
 }
 
+static bool ex_handler_eretu(const struct exception_table_entry *fixup,
+			     struct pt_regs *regs)
+{
+	struct pt_regs *user_regs;
+
+	/* Workaround Simics ERETU SP bug */
+	regs->sp -= 40;
+	user_regs = (struct pt_regs *)(regs->sp - offsetof(struct pt_regs, ip));
+	fred_info(user_regs)->exc = fred_info(regs)->exc;
+	fred_info(user_regs)->aux = fred_info(regs)->aux;
+	return ex_handler_default(fixup, regs);
+}
+
 int ex_get_fixup_type(unsigned long ip)
 {
 	const struct exception_table_entry *e = search_exception_tables(ip);
@@ -215,6 +229,8 @@ int fixup_exception(struct pt_regs *regs, int trapnr, unsigned long error_code,
 		return ex_handler_sgx(e, regs, trapnr);
 	case EX_TYPE_UCOPY_LEN:
 		return ex_handler_ucopy_len(e, regs, trapnr, reg, imm);
+	case EX_TYPE_ERETU:
+		return ex_handler_eretu(e, regs);
 	}
 	BUG();
 }
