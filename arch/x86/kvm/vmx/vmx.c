@@ -633,6 +633,7 @@ static bool is_valid_passthrough_msr(u32 msr)
 	case MSR_LBR_CORE_TO ... MSR_LBR_CORE_TO + 8:
 		/* LBR MSRs. These are handled in vmx_update_intercept_for_lbr_msrs() */
 		return true;
+#ifdef CONFIG_X86_FRED
 	case MSR_IA32_FRED_CONFIG:
 	case MSR_IA32_FRED_STKLVLS:
 	case MSR_IA32_FRED_RSP0:
@@ -646,6 +647,7 @@ static bool is_valid_passthrough_msr(u32 msr)
 	case MSR_SYSCALL_MASK:
 		/* These MSRs are in VMCS with CPUs having FRED support */
 		return cpu_has_ia32_fred();
+#endif
 	}
 
 	r = possible_passthrough_msr_slot(msr) != -ENOENT;
@@ -1345,6 +1347,7 @@ static void vmx_write_guest_kernel_gs_base(struct vcpu_vmx *vmx, u64 data)
 }
 #endif
 
+#ifdef CONFIG_X86_FRED
 static inline void vmx_vcpu_load_host_fred_config(void)
 {
 	if (!cpu_has_ia32_fred())
@@ -1360,6 +1363,7 @@ static inline void vmx_vcpu_load_host_fred_config(void)
 	vmcs_write64(HOST_IA32_FRED_SSP3, read_msr(MSR_IA32_FRED_SSP3));
 	vmcs_write64(HOST_IA32_FMASK, read_msr(MSR_SYSCALL_MASK));
 }
+#endif
 
 void vmx_vcpu_load_vmcs(struct kvm_vcpu *vcpu, int cpu,
 			struct loaded_vmcs *buddy)
@@ -1416,7 +1420,9 @@ void vmx_vcpu_load_vmcs(struct kvm_vcpu *vcpu, int cpu,
 			    (unsigned long)&get_cpu_entry_area(cpu)->tss.x86_tss);
 		vmcs_writel(HOST_GDTR_BASE, (unsigned long)gdt);   /* 22.2.4 */
 
+#ifdef CONFIG_X86_FRED
 		vmx_vcpu_load_host_fred_config();
+#endif
 
 		if (IS_ENABLED(CONFIG_IA32_EMULATION) || IS_ENABLED(CONFIG_X86_32)) {
 			/* 22.2.3 */
@@ -1799,8 +1805,10 @@ static void vmx_setup_uret_msrs(struct vcpu_vmx *vmx)
 
 	vmx_setup_uret_msr(vmx, MSR_STAR, load_syscall_msrs);
 	vmx_setup_uret_msr(vmx, MSR_LSTAR, load_syscall_msrs);
+#ifdef CONFIG_X86_FRED
 	if (!cpu_has_ia32_fred())
 		vmx_setup_uret_msr(vmx, MSR_SYSCALL_MASK, load_syscall_msrs);
+#endif
 #endif
 	vmx_setup_uret_msr(vmx, MSR_EFER, update_transition_efer(vmx));
 
@@ -4696,10 +4704,7 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	vmcs_writel(GUEST_IDTR_BASE, 0);
 	vmcs_write32(GUEST_IDTR_LIMIT, 0xffff);
 
-	/*
-	 * Guest may or may NOT enable FRED, anyway we
-	 * should always reset guest FRED config MSRs
-	 */
+#ifdef CONFIG_X86_FRED
 	if (cpu_has_ia32_fred()) {
 		vmcs_write64(GUEST_IA32_FRED_CONFIG, 0);
 		vmcs_write64(GUEST_IA32_FRED_RSP1, 0);
@@ -4711,6 +4716,7 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 		vmcs_write64(GUEST_IA32_FRED_SSP3, 0);
 		vmcs_write64(GUEST_IA32_FMASK, 0);
 	}
+#endif
 
 	vmcs_write32(GUEST_ACTIVITY_STATE, GUEST_ACTIVITY_ACTIVE);
 	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0);
@@ -7232,6 +7238,7 @@ static int vmx_vcpu_create(struct kvm_vcpu *vcpu)
 	vmx_disable_intercept_for_msr(vcpu, MSR_FS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_GS_BASE, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_KERNEL_GS_BASE, MSR_TYPE_RW);
+#ifdef CONFIG_X86_FRED
 	if (cpu_has_ia32_fred()) {
 		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_CONFIG, MSR_TYPE_RW);
 		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_STKLVLS, MSR_TYPE_RW);
@@ -7245,6 +7252,7 @@ static int vmx_vcpu_create(struct kvm_vcpu *vcpu)
 		vmx_disable_intercept_for_msr(vcpu, MSR_IA32_FRED_SSP3, MSR_TYPE_RW);
 		vmx_disable_intercept_for_msr(vcpu, MSR_SYSCALL_MASK, MSR_TYPE_RW);
 	}
+#endif
 #endif
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_CS, MSR_TYPE_RW);
 	vmx_disable_intercept_for_msr(vcpu, MSR_IA32_SYSENTER_ESP, MSR_TYPE_RW);
