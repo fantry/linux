@@ -4328,6 +4328,11 @@ static u32 vmx_vmexit_ctrl(void)
 		~(VM_EXIT_LOAD_IA32_PERF_GLOBAL_CTRL | VM_EXIT_LOAD_IA32_EFER);
 }
 
+static u64 vmx_vmexit_2nd_ctrl(void)
+{
+	return vmcs_config.vmexit_2nd_ctrl;
+}
+
 static void vmx_refresh_apicv_exec_ctrl(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
@@ -4584,9 +4589,9 @@ static void init_vmcs(struct vcpu_vmx *vmx)
 		vmcs_write64(GUEST_IA32_PAT, vmx->vcpu.arch.pat);
 
 	vm_exit_controls_set(vmx, vmx_vmexit_ctrl());
+	vm_secondary_exit_controls_set(vmx, vmx_vmexit_2nd_ctrl());
 
-	/* CPU has FRED, then it must have secondary VM exit controls. */
-	if (cpu_has_ia32_fred())
+	if (cpu_has_secondary_vmexit_ctrls())
 		vmcs_write64(SECONDARY_VM_EXIT_CONTROLS, vmcs_config.vmexit_2nd_ctrl);
 
 	/* 22.2.1, 20.8.1 */

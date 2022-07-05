@@ -1682,6 +1682,14 @@ static void copy_enlightened_to_vmcs12(struct vcpu_vmx *vmx, u32 hv_clean_fields
 		vmcs12->guest_tr_base = evmcs->guest_tr_base;
 		vmcs12->guest_gdtr_base = evmcs->guest_gdtr_base;
 		vmcs12->guest_idtr_base = evmcs->guest_idtr_base;
+		vmcs12->guest_ia32_fred_config = evmcs->guest_ia32_fred_config;
+		vmcs12->guest_ia32_fred_rsp1 = evmcs->guest_ia32_fred_rsp1;
+		vmcs12->guest_ia32_fred_rsp2 = evmcs->guest_ia32_fred_rsp2;
+		vmcs12->guest_ia32_fred_rsp3 = evmcs->guest_ia32_fred_rsp3;
+		vmcs12->guest_ia32_fred_stklvls = evmcs->guest_ia32_fred_stklvls;
+		vmcs12->guest_ia32_fred_ssp1 = evmcs->guest_ia32_fred_ssp1;
+		vmcs12->guest_ia32_fred_ssp2 = evmcs->guest_ia32_fred_ssp2;
+		vmcs12->guest_ia32_fred_ssp3 = evmcs->guest_ia32_fred_ssp3;
 		vmcs12->guest_es_limit = evmcs->guest_es_limit;
 		vmcs12->guest_cs_limit = evmcs->guest_cs_limit;
 		vmcs12->guest_ss_limit = evmcs->guest_ss_limit;
@@ -1736,6 +1744,14 @@ static void copy_enlightened_to_vmcs12(struct vcpu_vmx *vmx, u32 hv_clean_fields
 		vmcs12->host_tr_base = evmcs->host_tr_base;
 		vmcs12->host_gdtr_base = evmcs->host_gdtr_base;
 		vmcs12->host_idtr_base = evmcs->host_idtr_base;
+		vmcs12->host_ia32_fred_config = evmcs->host_ia32_fred_config;
+		vmcs12->host_ia32_fred_rsp1 = evmcs->host_ia32_fred_rsp1;
+		vmcs12->host_ia32_fred_rsp2 = evmcs->host_ia32_fred_rsp2;
+		vmcs12->host_ia32_fred_rsp3 = evmcs->host_ia32_fred_rsp3;
+		vmcs12->host_ia32_fred_stklvls = evmcs->host_ia32_fred_stklvls;
+		vmcs12->host_ia32_fred_ssp1 = evmcs->host_ia32_fred_ssp1;
+		vmcs12->host_ia32_fred_ssp2 = evmcs->host_ia32_fred_ssp2;
+		vmcs12->host_ia32_fred_ssp3 = evmcs->host_ia32_fred_ssp3;
 		vmcs12->host_rsp = evmcs->host_rsp;
 	}
 
@@ -1911,6 +1927,14 @@ static void copy_vmcs12_to_enlightened(struct vcpu_vmx *vmx)
 	evmcs->guest_tr_base = vmcs12->guest_tr_base;
 	evmcs->guest_gdtr_base = vmcs12->guest_gdtr_base;
 	evmcs->guest_idtr_base = vmcs12->guest_idtr_base;
+	evmcs->guest_ia32_fred_config = vmcs12->guest_ia32_fred_config;
+	evmcs->guest_ia32_fred_rsp1 = vmcs12->guest_ia32_fred_rsp1;
+	evmcs->guest_ia32_fred_rsp2 = vmcs12->guest_ia32_fred_rsp2;
+	evmcs->guest_ia32_fred_rsp3 = vmcs12->guest_ia32_fred_rsp3;
+	evmcs->guest_ia32_fred_stklvls = vmcs12->guest_ia32_fred_stklvls;
+	evmcs->guest_ia32_fred_ssp1 = vmcs12->guest_ia32_fred_ssp1;
+	evmcs->guest_ia32_fred_ssp2 = vmcs12->guest_ia32_fred_ssp2;
+	evmcs->guest_ia32_fred_ssp3 = vmcs12->guest_ia32_fred_ssp3;
 
 	evmcs->guest_ia32_pat = vmcs12->guest_ia32_pat;
 	evmcs->guest_ia32_efer = vmcs12->guest_ia32_efer;
@@ -2344,6 +2368,11 @@ static void prepare_vmcs02_early(struct vcpu_vmx *vmx, struct loaded_vmcs *vmcs0
 		exec_control &= ~VM_EXIT_LOAD_IA32_EFER;
 	vm_exit_controls_set(vmx, exec_control);
 
+	if (exec_control & VM_EXIT_ACTIVATE_SECONDARY_CONTROLS) {
+		exec_control = __vm_secondary_exit_controls_get(vmcs01);
+		vm_secondary_exit_controls_set(vmx, exec_control);
+	}
+
 	/*
 	 * Interrupt/Exception Fields
 	 */
@@ -2405,6 +2434,14 @@ static void prepare_vmcs02_rare(struct vcpu_vmx *vmx, struct vmcs12 *vmcs12)
 		vmcs_writel(GUEST_TR_BASE, vmcs12->guest_tr_base);
 		vmcs_writel(GUEST_GDTR_BASE, vmcs12->guest_gdtr_base);
 		vmcs_writel(GUEST_IDTR_BASE, vmcs12->guest_idtr_base);
+		vmcs_write64(GUEST_IA32_FRED_CONFIG, vmcs12->guest_ia32_fred_config);
+		vmcs_write64(GUEST_IA32_FRED_RSP1, vmcs12->guest_ia32_fred_rsp1);
+		vmcs_write64(GUEST_IA32_FRED_RSP2, vmcs12->guest_ia32_fred_rsp2);
+		vmcs_write64(GUEST_IA32_FRED_RSP3, vmcs12->guest_ia32_fred_rsp3);
+		vmcs_write64(GUEST_IA32_FRED_STKLVLS, vmcs12->guest_ia32_fred_stklvls);
+		vmcs_write64(GUEST_IA32_FRED_SSP1, vmcs12->guest_ia32_fred_ssp1);
+		vmcs_write64(GUEST_IA32_FRED_SSP2, vmcs12->guest_ia32_fred_ssp2);
+		vmcs_write64(GUEST_IA32_FRED_SSP3, vmcs12->guest_ia32_fred_ssp3);
 
 		vmx->segment_cache.bitmask = 0;
 	}
@@ -4045,6 +4082,14 @@ static bool is_vmcs12_ext_field(unsigned long field)
 	case GUEST_TR_BASE:
 	case GUEST_GDTR_BASE:
 	case GUEST_IDTR_BASE:
+	case GUEST_IA32_FRED_CONFIG:
+	case GUEST_IA32_FRED_RSP1:
+	case GUEST_IA32_FRED_RSP2:
+	case GUEST_IA32_FRED_RSP3:
+	case GUEST_IA32_FRED_STKLVLS:
+	case GUEST_IA32_FRED_SSP1:
+	case GUEST_IA32_FRED_SSP2:
+	case GUEST_IA32_FRED_SSP3:
 	case GUEST_PENDING_DBG_EXCEPTIONS:
 	case GUEST_BNDCFGS:
 		return true;
@@ -4094,6 +4139,14 @@ static void sync_vmcs02_to_vmcs12_rare(struct kvm_vcpu *vcpu,
 	vmcs12->guest_tr_base = vmcs_readl(GUEST_TR_BASE);
 	vmcs12->guest_gdtr_base = vmcs_readl(GUEST_GDTR_BASE);
 	vmcs12->guest_idtr_base = vmcs_readl(GUEST_IDTR_BASE);
+	vmcs12->guest_ia32_fred_config = vmcs_read64(GUEST_IA32_FRED_CONFIG);
+	vmcs12->guest_ia32_fred_rsp1 = vmcs_read64(GUEST_IA32_FRED_RSP1);
+	vmcs12->guest_ia32_fred_rsp2 = vmcs_read64(GUEST_IA32_FRED_RSP2);
+	vmcs12->guest_ia32_fred_rsp3 = vmcs_read64(GUEST_IA32_FRED_RSP3);
+	vmcs12->guest_ia32_fred_stklvls = vmcs_read64(GUEST_IA32_FRED_STKLVLS);
+	vmcs12->guest_ia32_fred_ssp1 = vmcs_read64(GUEST_IA32_FRED_SSP1);
+	vmcs12->guest_ia32_fred_ssp2 = vmcs_read64(GUEST_IA32_FRED_SSP2);
+	vmcs12->guest_ia32_fred_ssp3 = vmcs_read64(GUEST_IA32_FRED_SSP3);
 	vmcs12->guest_pending_dbg_exceptions =
 		vmcs_readl(GUEST_PENDING_DBG_EXCEPTIONS);
 	if (kvm_mpx_supported())
@@ -4327,6 +4380,14 @@ static void load_vmcs12_host_state(struct kvm_vcpu *vcpu,
 	vmcs_writel(GUEST_GDTR_BASE, vmcs12->host_gdtr_base);
 	vmcs_write32(GUEST_IDTR_LIMIT, 0xFFFF);
 	vmcs_write32(GUEST_GDTR_LIMIT, 0xFFFF);
+	vmcs_write64(GUEST_IA32_FRED_CONFIG, vmcs12->host_ia32_fred_config);
+	vmcs_write64(GUEST_IA32_FRED_RSP1, vmcs12->host_ia32_fred_rsp1);
+	vmcs_write64(GUEST_IA32_FRED_RSP2, vmcs12->host_ia32_fred_rsp2);
+	vmcs_write64(GUEST_IA32_FRED_RSP3, vmcs12->host_ia32_fred_rsp3);
+	vmcs_write64(GUEST_IA32_FRED_STKLVLS, vmcs12->host_ia32_fred_stklvls);
+	vmcs_write64(GUEST_IA32_FRED_SSP1, vmcs12->host_ia32_fred_ssp1);
+	vmcs_write64(GUEST_IA32_FRED_SSP2, vmcs12->host_ia32_fred_ssp2);
+	vmcs_write64(GUEST_IA32_FRED_SSP3, vmcs12->host_ia32_fred_ssp3);
 
 	/* If not VM_EXIT_CLEAR_BNDCFGS, the L2 value propagates to L1.  */
 	if (vmcs12->vm_exit_controls & VM_EXIT_CLEAR_BNDCFGS)

@@ -468,35 +468,39 @@ static inline u8 vmx_get_rvi(void)
 	return vmcs_read16(GUEST_INTR_STATUS) & 0xff;
 }
 
-#define BUILD_CONTROLS_SHADOW(lname, uname)				    \
-static inline void lname##_controls_set(struct vcpu_vmx *vmx, u32 val)	    \
+#define BUILD_CONTROLS_SHADOW(lname, uname, is_u64)			    \
+static inline void lname##_controls_set(struct vcpu_vmx *vmx, u64 val)	    \
 {									    \
 	if (vmx->loaded_vmcs->controls_shadow.lname != val) {		    \
-		vmcs_write32(uname, val);				    \
+		if (is_u64)						    \
+			vmcs_write64(uname, val);			    \
+		else							    \
+			vmcs_write32(uname, val);			    \
 		vmx->loaded_vmcs->controls_shadow.lname = val;		    \
 	}								    \
 }									    \
-static inline u32 __##lname##_controls_get(struct loaded_vmcs *vmcs)	    \
+static inline u64 __##lname##_controls_get(struct loaded_vmcs *vmcs)	    \
 {									    \
 	return vmcs->controls_shadow.lname;				    \
 }									    \
-static inline u32 lname##_controls_get(struct vcpu_vmx *vmx)		    \
+static inline u64 lname##_controls_get(struct vcpu_vmx *vmx)		    \
 {									    \
 	return __##lname##_controls_get(vmx->loaded_vmcs);		    \
 }									    \
-static inline void lname##_controls_setbit(struct vcpu_vmx *vmx, u32 val)   \
+static inline void lname##_controls_setbit(struct vcpu_vmx *vmx, u64 val)   \
 {									    \
 	lname##_controls_set(vmx, lname##_controls_get(vmx) | val);	    \
 }									    \
-static inline void lname##_controls_clearbit(struct vcpu_vmx *vmx, u32 val) \
+static inline void lname##_controls_clearbit(struct vcpu_vmx *vmx, u64 val) \
 {									    \
 	lname##_controls_set(vmx, lname##_controls_get(vmx) & ~val);	    \
 }
-BUILD_CONTROLS_SHADOW(vm_entry, VM_ENTRY_CONTROLS)
-BUILD_CONTROLS_SHADOW(vm_exit, VM_EXIT_CONTROLS)
-BUILD_CONTROLS_SHADOW(pin, PIN_BASED_VM_EXEC_CONTROL)
-BUILD_CONTROLS_SHADOW(exec, CPU_BASED_VM_EXEC_CONTROL)
-BUILD_CONTROLS_SHADOW(secondary_exec, SECONDARY_VM_EXEC_CONTROL)
+BUILD_CONTROLS_SHADOW(vm_entry, VM_ENTRY_CONTROLS, false)
+BUILD_CONTROLS_SHADOW(vm_exit, VM_EXIT_CONTROLS, false)
+BUILD_CONTROLS_SHADOW(vm_secondary_exit, SECONDARY_VM_EXIT_CONTROLS, true)
+BUILD_CONTROLS_SHADOW(pin, PIN_BASED_VM_EXEC_CONTROL, false)
+BUILD_CONTROLS_SHADOW(exec, CPU_BASED_VM_EXEC_CONTROL, false)
+BUILD_CONTROLS_SHADOW(secondary_exec, SECONDARY_VM_EXEC_CONTROL, false)
 
 /*
  * VMX_REGS_LAZY_LOAD_SET - The set of registers that will be updated in the
