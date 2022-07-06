@@ -29,12 +29,11 @@ static inline void native_load_gs_index(unsigned int selector)
 	 * register.
 	 */
 	alternative_io("1: call asm_load_gs_index\n"
-		       "2:\n"
 		       ".pushsection \".fixup\",\"ax\"\n"
-		       "3:	xorl %k[sel], %k[sel]\n"
-		       "	jmp 2b\n"
+		       "2:	xorl %k[sel], %k[sel]\n"
+		       "	jmp 1b\n"
 		       ".popsection\n"
-		       _ASM_EXTABLE(1b, 3b),
+		       _ASM_EXTABLE(1b, 2b),
 		       _ASM_BYTES(0x3e) LKGS_DI,
 		       X86_FEATURE_LKGS,
 		       ASM_OUTPUT2([sel] "+D" (sel), ASM_CALL_CONSTRAINT),
