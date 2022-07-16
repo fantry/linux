@@ -85,10 +85,12 @@ __visible noinstr void fred_entry_from_user(struct pt_regs *regs)
 
 	if (likely(fi->type == EXTYPE_SYSCALL &&
 		   fi->vector == FRED_SYSCALL)) {
+		regs->orig_ax = rax;
 		do_syscall_64(regs, rax);
 	} else if (likely(IS_ENABLED(CONFIG_IA32_EMULATION) &&
 			  fi->type == EXTYPE_SWINT &&
 			  fi->vector == IA32_SYSCALL_VECTOR)) {
+		regs->orig_ax = rax;
 		do_int80_syscall_32(regs); /* + rax? */
 	} else {
 		/* Not a system call */
@@ -96,11 +98,12 @@ __visible noinstr void fred_entry_from_user(struct pt_regs *regs)
 
 		/* Convert frame to an exception frame */
 		regs->ax = rax;
-		regs->orig_ax = -1;
 
 		errcode = fi->errcode;
 		vector  = fi->vector;
 		type    = fi->type;
+
+		regs->orig_ax = -1;
 
 		type = array_index_nospec(type, FRED_EXTYPE_COUNT);
 		user_handlers[type](regs, errcode, vector);

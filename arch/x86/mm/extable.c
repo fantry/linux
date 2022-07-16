@@ -144,13 +144,20 @@ static bool ex_handler_ucopy_len(const struct exception_table_entry *fixup,
 static bool ex_handler_eretu(const struct exception_table_entry *fixup,
 			     struct pt_regs *regs)
 {
-	struct pt_regs *user_regs;
+	struct pt_regs *uregs = (struct pt_regs *)(regs->sp - offsetof(struct pt_regs, orig_ax));
+	unsigned short ss = uregs->ss;
+	unsigned short cs = uregs->cs;
 
-	/* Workaround Simics ERETU SP bug */
-	regs->sp -= 40;
-	user_regs = (struct pt_regs *)(regs->sp - offsetof(struct pt_regs, ip));
-	fred_info(user_regs)->exc = fred_info(regs)->exc;
-	fred_info(user_regs)->aux = fred_info(regs)->aux;
+	fred_info(uregs)->aux = fred_info(regs)->aux;
+	fred_info(uregs)->__resv_ssl = fred_info(regs)->__resv_ssl;
+	uregs->ss = ss;
+	fred_info(uregs)->__resv_csl = fred_info(regs)->__resv_csl;
+	fred_info(uregs)->current_stack_level = 0;
+	uregs->cs = cs;
+	fred_info(uregs)->errcode = fred_info(regs)->errcode;
+
+	/* if the user level is 32-bit compatibility mode, we should clear bit 57 of SS */
+
 	return ex_handler_default(fixup, regs);
 }
 

@@ -80,9 +80,9 @@
 #define FRED_SYSENTER		2
 
 /* Flags above the CS selector (regs->csl) */
-#define FRED_CSL_ENABLE_NMI		_BITUL(16)
-#define FRED_CSL_ALLOW_SINGLE_STEP	_BITUL(17)
-#define FRED_CSL_INTERRUPT_SHADOW	_BITUL(18)
+#define FRED_CSL_ENABLE_NMI		_BITUL(28)
+#define FRED_CSL_ALLOW_SINGLE_STEP	_BITUL(25)
+#define FRED_CSL_INTERRUPT_SHADOW	_BITUL(24)
 
 #define CSL_PROCESS_START \
 	(FRED_CSL_ENABLE_NMI | FRED_CSL_ALLOW_SINGLE_STEP)
@@ -94,19 +94,42 @@
 
 /* FRED stack frame information */
 struct fred_info {
+	unsigned long __resv_gregs[15];
+
 	union {
-		unsigned long exc; /* Exception info */
-		/*
-		 * For now, assume the errcode and vector fields
-		 * may grow into the reserved area...
-		 */
+		unsigned long __resv_orig_ax;
+		unsigned short errcode;
+	};
+	unsigned long __resv_ip;
+	union {
+		unsigned long __resv_csl;
 		struct {
-			unsigned int errcode : 32;
-			unsigned int vector  : 16;
-			unsigned int type    :  3;
-			unsigned int i_resv1 :  5;
-			unsigned int enclv   :  1;
-			unsigned int i_resv2 :  7;
+			unsigned int __cs_resv1		: 16;
+			unsigned int current_stack_level: 2;
+			unsigned int __cs_resv2		: 6;
+			unsigned int interrupt_shadowed	: 1;
+			unsigned int software_initiated	: 1;
+			unsigned int __cs_resv3		: 2;
+			unsigned int nmi		: 1;
+			unsigned int __cs_resv4		: 3;
+			unsigned int __cs_resv5		: 32;
+		};
+	};
+	unsigned long __resv_flags;
+	unsigned long __resv_sp;
+	union {
+		unsigned long __resv_ssl;
+		struct {
+			unsigned int __ss_resv1	: 32;
+			unsigned int vector	: 8;
+			unsigned int __ss_resv2	: 8;
+			unsigned int type	: 4;
+			unsigned int __ss_resv3	: 4;
+			unsigned int enclv	: 1;
+			unsigned int long_mode	: 1;
+			unsigned int nested	: 1;
+			unsigned int __ss_resv4	: 1;
+			unsigned int instr_len	: 4;
 		};
 	};
 	unsigned long aux;	/* Auxiliary data: CR2, DR6, ... */
@@ -115,8 +138,10 @@ struct fred_info {
 
 /* Full format of the FRED stack frame */
 struct fred_frame {
-	struct pt_regs   regs;
-	struct fred_info info;
+	union {
+		struct fred_info info;
+		struct pt_regs   regs; /* copy_thread doesn't care aux */
+	};
 };
 
 /* Getting the FRED frame information from a pt_regs pointer */

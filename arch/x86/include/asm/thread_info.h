@@ -43,7 +43,7 @@
 # endif
 #else /* x86-64 */
 # ifdef CONFIG_X86_FRED
-#  define TOP_OF_KERNEL_STACK_PADDING (3*8)
+#  define TOP_OF_KERNEL_STACK_PADDING (2*8)
 # else
 #  define TOP_OF_KERNEL_STACK_PADDING 0
 # endif
