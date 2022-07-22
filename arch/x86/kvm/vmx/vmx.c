@@ -3039,6 +3039,7 @@ int vmx_set_efer(struct kvm_vcpu *vcpu, u64 efer)
 static void enter_lmode(struct kvm_vcpu *vcpu)
 {
 	u32 guest_tr_ar;
+	unsigned long rip = vmcs_readl(GUEST_RIP);
 
 	vmx_segment_cache_clear(to_vmx(vcpu));
 
@@ -3051,11 +3052,15 @@ static void enter_lmode(struct kvm_vcpu *vcpu)
 			     | VMX_AR_TYPE_BUSY_64_TSS);
 	}
 	vmx_set_efer(vcpu, vcpu->arch.efer | EFER_LMA);
+	pr_info("KVM: %s vcpu%d @%016lx", __func__, vcpu->vcpu_id, rip);
 }
 
 static void exit_lmode(struct kvm_vcpu *vcpu)
 {
+	unsigned long rip = vmcs_readl(GUEST_RIP);
+
 	vmx_set_efer(vcpu, vcpu->arch.efer & ~EFER_LMA);
+	pr_info("KVM: %s vcpu%d @%016lx", __func__, vcpu->vcpu_id, rip);
 }
 
 #endif
@@ -3164,9 +3169,25 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
 	unsigned long hw_cr0, old_cr0_pg;
+	unsigned long old_cr0 = kvm_read_cr0(vcpu);
+	unsigned long rip = vmcs_readl(GUEST_RIP);
 	u32 tmp;
 
 	old_cr0_pg = kvm_read_cr0_bits(vcpu, X86_CR0_PG);
+
+	if ((cr0 ^ old_cr0) & X86_CR0_PE) {
+		if (cr0 & X86_CR0_PE)
+			pr_info("KVM: %s vcpu%d entering protected mode @%016lx", __func__, vcpu->vcpu_id, rip);
+		else
+			pr_info("KVM: %s vcpu%d exiting to real mode @%016lx", __func__, vcpu->vcpu_id, rip);
+	}
+
+	if ((cr0 ^ old_cr0) & X86_CR0_PG) {
+		if (cr0 & X86_CR0_PG)
+			pr_info("KVM: %s vcpu%d enabling paging @%016lx", __func__, vcpu->vcpu_id, rip);
+		else
+			pr_info("KVM: %s vcpu%d disabling paging @%016lx", __func__, vcpu->vcpu_id, rip);
+	}
 
 	hw_cr0 = (cr0 & ~KVM_VM_CR0_ALWAYS_OFF);
 	if (is_unrestricted_guest(vcpu))
@@ -3185,6 +3206,7 @@ void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 	vmcs_writel(CR0_READ_SHADOW, cr0);
 	vmcs_writel(GUEST_CR0, hw_cr0);
+	pr_info("KVM: %s vcpu%d shadow/guest cr0 %016lx : %016lx", __func__, vcpu->vcpu_id, cr0, hw_cr0);
 	vcpu->arch.cr0 = cr0;
 	kvm_register_mark_available(vcpu, VCPU_EXREG_CR0);
 
@@ -4663,6 +4685,9 @@ static void __vmx_vcpu_reset(struct kvm_vcpu *vcpu)
 static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 {
 	struct vcpu_vmx *vmx = to_vmx(vcpu);
+	extern unsigned long nonlm_emulator_start_addr;
+
+	pr_info("KVM: %s vcpu%d", __func__, vcpu->vcpu_id);
 
 	if (!init_event)
 		__vmx_vcpu_reset(vcpu);
@@ -4679,8 +4704,10 @@ static void vmx_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	kvm_register_mark_available(vcpu, VCPU_EXREG_SEGMENTS);
 
 	seg_setup(VCPU_SREG_CS);
-	vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
-	vmcs_writel(GUEST_CS_BASE, 0xffff0000ul);
+	if (!nonlm_emulator_start_addr) {
+		vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
+		vmcs_writel(GUEST_CS_BASE, 0xffff0000ul);
+	}
 
 	seg_setup(VCPU_SREG_DS);
 	seg_setup(VCPU_SREG_ES);

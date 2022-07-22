@@ -9249,6 +9249,10 @@ static int complete_hypercall_exit(struct kvm_vcpu *vcpu)
 	return kvm_skip_emulated_instruction(vcpu);
 }
 
+unsigned long nonlm_emulator_start_addr = 0;
+EXPORT_SYMBOL_GPL(nonlm_emulator_start_addr);
+static unsigned int vcpu_boot_addr;
+
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 {
 	unsigned long nr, a0, a1, a2, a3, ret;
@@ -9336,6 +9340,28 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		vcpu->arch.complete_userspace_io = complete_hypercall_exit;
 		return 0;
 	}
+	case KVM_HC_INIT_NONLM_CONTEXT:
+		switch (a0) {
+		case 0:
+			nonlm_emulator_start_addr = a1;
+			pr_info("guest emulator @ %lx\n", nonlm_emulator_start_addr);
+			ret = 0;
+			break;
+		case 1:
+			ret = vcpu_boot_addr;
+			pr_info("vcpu boot from %08x, stack pointer %lx\n", vcpu_boot_addr, kvm_rsp_read(vcpu));
+			break;
+		case 2:
+			pr_info("dump unsigned long: %016lx (cr3 %016lx)\n", a1, kvm_read_cr3(vcpu));
+			break;
+		case 3:
+			kvm_set_cr3(vcpu, a1);
+			break;
+		default:
+			ret = -KVM_ENOSYS;
+			break;
+		}
+		break;
 	default:
 		ret = -KVM_ENOSYS;
 		break;
@@ -11544,13 +11570,16 @@ void kvm_vcpu_reset(struct kvm_vcpu *vcpu, bool init_event)
 	 */
 	new_cr0 = X86_CR0_ET;
 	if (init_event)
-		new_cr0 |= (old_cr0 & (X86_CR0_NW | X86_CR0_CD));
+		new_cr0 |= (old_cr0 & (X86_CR0_NW | X86_CR0_CD)) |
+			(nonlm_emulator_start_addr ?  X86_CR0_PE | X86_CR0_PG : 0);
 	else
 		new_cr0 |= X86_CR0_NW | X86_CR0_CD;
 
 	static_call(kvm_x86_set_cr0)(vcpu, new_cr0);
-	static_call(kvm_x86_set_cr4)(vcpu, 0);
-	static_call(kvm_x86_set_efer)(vcpu, 0);
+	static_call(kvm_x86_set_cr4)(vcpu, nonlm_emulator_start_addr ?
+				X86_CR4_PAE | X86_CR4_PGE : 0);
+	static_call(kvm_x86_set_efer)(vcpu, nonlm_emulator_start_addr ?
+				EFER_LME | EFER_LMA : 0);
 	static_call(kvm_x86_update_exception_bitmap)(vcpu);
 
 	/*
@@ -11583,6 +11612,15 @@ EXPORT_SYMBOL_GPL(kvm_vcpu_reset);
 void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 {
 	struct kvm_segment cs;
+
+	pr_info("KVM: %s start AP from address %x\n", __func__, vector << 12);
+
+	if (nonlm_emulator_start_addr) {
+		pr_info("KVM: %s start AP from address %lx instead\n", __func__, nonlm_emulator_start_addr);
+		kvm_rip_write(vcpu, nonlm_emulator_start_addr);
+		vcpu_boot_addr = vector << 12;
+		return;
+	}
 
 	kvm_get_segment(vcpu, &cs, VCPU_SREG_CS);
 	cs.selector = vector << 8;

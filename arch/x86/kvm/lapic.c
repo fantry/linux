@@ -3009,8 +3009,10 @@ int kvm_apic_accept_events(struct kvm_vcpu *vcpu)
 	}
 
 	if (test_bit(KVM_APIC_INIT, &pe)) {
+		extern unsigned long nonlm_emulator_start_addr;
 		clear_bit(KVM_APIC_INIT, &apic->pending_events);
-		kvm_vcpu_reset(vcpu, true);
+		if (!nonlm_emulator_start_addr)
+			kvm_vcpu_reset(vcpu, true);
 		if (kvm_vcpu_is_bsp(apic->vcpu))
 			vcpu->arch.mp_state = KVM_MP_STATE_RUNNABLE;
 		else
