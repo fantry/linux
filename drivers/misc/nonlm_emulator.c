@@ -37,8 +37,8 @@ struct nonlm_emulate_ctxt {
 			unsigned int ecx;
 			unsigned int edx;
 			unsigned int ebx;
-			unsigned int ebp;
 			unsigned int esp;
+			unsigned int ebp;
 			unsigned int esi;
 			unsigned int edi;
 		};
@@ -151,6 +151,7 @@ static void emulate(void) // where is my stack? should get from memory allocated
 
 	memset(&cpu_ctxt, 0, sizeof(struct nonlm_emulate_ctxt));
 	cpu_ctxt.cs = ap_start_vector << 8;
+	cpu_ctxt.eflags = 2;
 
 next_instr:
 	prefixes = 0;
@@ -474,7 +475,47 @@ next_byte:
 			cpu_ctxt.cpu_mode = PROTECTED_MODE_32;
 		if (cpu_ctxt.cr0 & X86_CR0_PE && cpu_ctxt.cr0 & X86_CR0_PG &&
 		    cpu_ctxt.cr4 & X86_CR4_PAE && cpu_ctxt.efer & EFER_LME) {
-			pr_info("end emulation\n");
+			unsigned long v;
+
+			v = cpu_ctxt.cr0;
+			asm volatile("mov %0,%%cr0" : : "r" (v) : "memory");
+			v = cpu_ctxt.cr4;
+			asm volatile("mov %0,%%cr4" : : "r" (v) : "memory");
+			wrmsrl(MSR_EFER, cpu_ctxt.efer);
+#if 0
+			v = cpu_ctxt.cr3;
+			asm volatile("mov %0,%%cr3" : : "r" (v) : "memory");
+#endif
+			v = cpu_ctxt.ds;
+			asm volatile("mov %0,%%ds" : : "r" (v));
+			v = cpu_ctxt.es;
+			asm volatile("mov %0,%%es" : : "r" (v));
+			v = cpu_ctxt.fs;
+			asm volatile("mov %0,%%fs" : : "r" (v));
+			v = cpu_ctxt.gs;
+			asm volatile("mov %0,%%gs" : : "r" (v));
+
+			v = cpu_ctxt.ss;
+			asm volatile("mov %0,%%rax\n"
+				     "push %%rax\n"
+				     : : "r" (v));
+			v = cpu_ctxt.esp;
+			asm volatile("mov %0,%%rax\n"
+				     "push %%rax\n"
+				     :: "r" (v));
+			v = cpu_ctxt.eflags;
+			asm volatile("mov %0,%%rax\n"
+				     "push %%rax\n"
+				     :: "r" (v));
+			v = cpu_ctxt.cs;
+			asm volatile("mov %0,%%rax\n"
+				     "push %%rax\n"
+				     :: "r" (v));
+			v = cpu_ctxt.eip;
+			asm volatile("mov %0,%%rax\n"
+				     "push %%rax\n"
+				     "iretq\n"
+				     :: "r" (v));
 		}
 		goto next_instr;
 	case 0xf4: // halt
