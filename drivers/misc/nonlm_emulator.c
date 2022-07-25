@@ -326,53 +326,47 @@ next_byte:
 		}
 		goto next_instr;
 	}
-	case 0x85: // test reg, reg
-		if (cpu_ctxt.cpu_mode == REAL_MODE) {
-			unsigned char modrm = *(instr_start + instr_len++);
-			unsigned char reg = (modrm >> 3) & 7;
-			unsigned char mod = (modrm >> 6) & 3;
-			if (mod == 3) {
-				if (prefixes & PREFIX_DATA) {
-					unsigned int a = get_greg(&cpu_ctxt, modrm & 0x7);
-					unsigned int b = get_greg(&cpu_ctxt, reg);
-					unsigned int r = a & b;
-					if (r == 0)
-						cpu_ctxt.eflags |= X86_EFLAGS_ZF;
-					else
-						cpu_ctxt.eflags &= ~X86_EFLAGS_ZF;
-					if (r & 0x80000000)
-						cpu_ctxt.eflags |= X86_EFLAGS_SF;
-					else
-						cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
-					cpu_ctxt.eflags &= ~X86_EFLAGS_CF;
-					cpu_ctxt.eflags &= ~X86_EFLAGS_OF;
-					pr_info("test 0x%x : 0x%x\n", a, b);
-				} else {
-					unsigned short a = get_greg(&cpu_ctxt, modrm & 0x7);
-					unsigned short b = get_greg(&cpu_ctxt, reg);
-					unsigned short r = a & b;
-					if (r == 0)
-						cpu_ctxt.eflags |= X86_EFLAGS_ZF;
-					else
-						cpu_ctxt.eflags &= ~X86_EFLAGS_ZF;
-					if (r & 0x8000)
-						cpu_ctxt.eflags |= X86_EFLAGS_SF;
-					else
-						cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
-					cpu_ctxt.eflags &= ~X86_EFLAGS_CF;
-					cpu_ctxt.eflags &= ~X86_EFLAGS_OF;
-					pr_info("test 0x%x : 0x%x\n", a, b);
-				}
-			} else {
-				pr_err("unrecognized instruction 0x%02x\n", b);
-				break;
-			}
-			cpu_ctxt.eflags |= X86_EFLAGS_ZF;
-		} else {
+	case 0x85: { // test reg, reg
+		unsigned char modrm = *(instr_start + instr_len++);
+		unsigned char reg = (modrm >> 3) & 7;
+		unsigned char mod = (modrm >> 6) & 3;
+		if (mod != 3) {
 			pr_err("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
+		cpu_ctxt.eflags &= ~X86_EFLAGS_CF;
+		cpu_ctxt.eflags &= ~X86_EFLAGS_OF;
+		if ((cpu_ctxt.cpu_mode == REAL_MODE && prefixes & PREFIX_DATA) ||
+		    cpu_ctxt.cpu_mode == PROTECTED_MODE_32) {
+			unsigned int a = get_greg(&cpu_ctxt, modrm & 0x7);
+			unsigned int b = get_greg(&cpu_ctxt, reg);
+			unsigned int r = a & b;
+			if (r == 0)
+				cpu_ctxt.eflags |= X86_EFLAGS_ZF;
+			else
+				cpu_ctxt.eflags &= ~X86_EFLAGS_ZF;
+			if (r & 0x80000000)
+				cpu_ctxt.eflags |= X86_EFLAGS_SF;
+			else
+				cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
+			pr_info("test 0x%x : 0x%x\n", a, b);
+		} else if ((cpu_ctxt.cpu_mode == PROTECTED_MODE_32 && prefixes & PREFIX_DATA) ||
+		    cpu_ctxt.cpu_mode == REAL_MODE) {
+			unsigned short a = get_greg(&cpu_ctxt, modrm & 0x7);
+			unsigned short b = get_greg(&cpu_ctxt, reg);
+			unsigned short r = a & b;
+			if (r == 0)
+				cpu_ctxt.eflags |= X86_EFLAGS_ZF;
+			else
+				cpu_ctxt.eflags &= ~X86_EFLAGS_ZF;
+			if (r & 0x8000)
+				cpu_ctxt.eflags |= X86_EFLAGS_SF;
+			else
+				cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
+			pr_info("test 0x%x : 0x%x\n", a, b);
+		}
 		goto next_instr;
+	}
 	case 0x8b: { // mov [moffset] ==> greg
 		unsigned char modrm = *(instr_start + instr_len++);
 		unsigned char reg = (modrm >> 3) & 7;
