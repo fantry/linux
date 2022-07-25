@@ -174,22 +174,23 @@ next_byte:
 			unsigned char modrm = *(instr_start + instr_len++);
 			unsigned char reg = (modrm >> 3) & 7;
 			unsigned char mod = (modrm >> 6) & 3;
-			short disp16 = 0;
+			unsigned long disp16 = 0;
 			struct nonlm_desc_ptr *dtr;
 			if (mod == 0 && ((modrm & 7) == 6)) {
 				disp16 = *(short *)(instr_start + instr_len);
 				instr_len += 2;
+				disp16 += cpu_ctxt.ds << 4;
 			} else {
 				pr_err("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 			if (reg == 2) {
 				dtr = &cpu_ctxt.gdtr;
-				pr_info("lgdt from 0x%x\n", disp16);
+				pr_info("lgdt from 0x%lx\n", disp16);
 			}
 			if (reg == 3) {
 				dtr = &cpu_ctxt.idtr;
-				pr_info("lidt from 0x%x\n", disp16);
+				pr_info("lidt from 0x%lx\n", disp16);
 			}
 			dtr->size = *(unsigned short *)(unsigned long)disp16;
 			pr_info("size 0x%x\n", dtr->size);
