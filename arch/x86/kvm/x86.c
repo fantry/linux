@@ -11604,7 +11604,7 @@ void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 		pr_info("KVM: %s start AP from address %lx instead\n", __func__, nonlm_emulator_start_addr);
 		kvm_rip_write(vcpu, nonlm_emulator_start_addr);
 		kvm_set_cr3(vcpu, nonlm_emulator_cr3);
-		kvm_rsp_write(vcpu, nonlm_emulator_cr3 + (PAGE_SIZE << 2));
+		kvm_rsp_write(vcpu, (nonlm_emulator_cr3 & 0xfffffffffffff000ULL) + (PAGE_SIZE << 2));
 		kvm_rdi_write(vcpu, vector);
 		return;
 	}
