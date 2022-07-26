@@ -9251,7 +9251,8 @@ static int complete_hypercall_exit(struct kvm_vcpu *vcpu)
 
 unsigned long nonlm_emulator_start_addr = 0;
 EXPORT_SYMBOL_GPL(nonlm_emulator_start_addr);
-static unsigned int cpu_boot_vector;
+
+static unsigned long nonlm_emulator_cr3;
 
 int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 {
@@ -9341,26 +9342,10 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		return 0;
 	}
 	case KVM_HC_INIT_NONLM_CONTEXT:
-		switch (a0) {
-		case 0:
-			nonlm_emulator_start_addr = a1;
-			pr_info("guest emulator @ %lx\n", nonlm_emulator_start_addr);
-			ret = 0;
-			break;
-		case 1:
-			ret = cpu_boot_vector;
-			pr_info("vcpu boot vector %08x, stack pointer %lx\n", cpu_boot_vector, kvm_rsp_read(vcpu));
-			break;
-		case 2:
-			pr_info("dump unsigned long: %016lx (cr3 %016lx)\n", a1, kvm_read_cr3(vcpu));
-			break;
-		case 3:
-			kvm_set_cr3(vcpu, a1);
-			break;
-		default:
-			ret = -KVM_ENOSYS;
-			break;
-		}
+		nonlm_emulator_start_addr = a0;
+		nonlm_emulator_cr3 = a1;
+		pr_info("guest emulator @0x%lx, cr3 0x%lx\n", nonlm_emulator_start_addr, nonlm_emulator_cr3);
+		ret = 0;
 		break;
 	default:
 		ret = -KVM_ENOSYS;
@@ -11618,7 +11603,9 @@ void kvm_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 	if (nonlm_emulator_start_addr) {
 		pr_info("KVM: %s start AP from address %lx instead\n", __func__, nonlm_emulator_start_addr);
 		kvm_rip_write(vcpu, nonlm_emulator_start_addr);
-		cpu_boot_vector = vector;
+		kvm_set_cr3(vcpu, nonlm_emulator_cr3);
+		kvm_rsp_write(vcpu, nonlm_emulator_cr3 + (PAGE_SIZE << 2));
+		kvm_rdi_write(vcpu, vector);
 		return;
 	}
 
