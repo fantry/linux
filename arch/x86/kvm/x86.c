@@ -9342,9 +9342,13 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		return 0;
 	}
 	case KVM_HC_INIT_NONLM_CONTEXT:
-		nonlm_emulator_start_addr = a0;
-		nonlm_emulator_cr3 = a1;
-		pr_info("guest emulator @0x%lx, cr3 0x%lx\n", nonlm_emulator_start_addr, nonlm_emulator_cr3);
+		nonlm_emulator_cr3 = a0;
+		nonlm_emulator_start_addr = a1;
+		if (a0 == 0) {
+			pr_info("instruction #%ld @0x%lx\n", a1, a2);
+			nonlm_emulator_start_addr = 0;
+		} else
+			pr_info("guest emulator @0x%lx (cr3 0x%lx)\n", nonlm_emulator_start_addr, nonlm_emulator_cr3);
 		ret = 0;
 		break;
 	default:

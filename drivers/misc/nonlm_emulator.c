@@ -7,9 +7,6 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Xin Li");
 
-static struct page *page;
-static void *l4e_va;
-
 #define PREFIX_DATA	0x08
 
 struct nonlm_desc_ptr {
@@ -52,7 +49,7 @@ struct nonlm_emulate_ctxt {
 	struct nonlm_desc_ptr gdtr;
 	struct nonlm_desc_ptr idtr;
 	union {
-		unsigned int crs[5];
+		unsigned int cregs[5];
 		struct {
 			unsigned int cr0;
 			unsigned int cr1;
@@ -90,18 +87,18 @@ static inline unsigned short *get_sreg_addr(struct nonlm_emulate_ctxt *cpu_ctxt,
 
 static inline unsigned int get_creg(struct nonlm_emulate_ctxt *cpu_ctxt, unsigned char reg)
 {
-	return cpu_ctxt->crs[reg];
+	return cpu_ctxt->cregs[reg];
 }
 
 static inline unsigned int *get_creg_addr(struct nonlm_emulate_ctxt *cpu_ctxt, unsigned char reg)
 {
-	return &cpu_ctxt->crs[reg];
+	return &cpu_ctxt->cregs[reg];
 }
 
 static void emulate(unsigned long ap_start_vector)
 {
 	struct nonlm_emulate_ctxt cpu_ctxt;
-	int instr_emulated = -1;
+	unsigned long instr_cnt = 0;
 	unsigned int prefixes;
 	int instr_len = 0;
 	unsigned char b, *instr_start;
@@ -126,20 +123,36 @@ static void emulate(unsigned long ap_start_vector)
 	}
 #endif
 
-	memset(&cpu_ctxt, 0, sizeof(struct nonlm_emulate_ctxt));
+	cpu_ctxt.eip = 0;
+	for (int i = 0; i < 8; i++)
+		cpu_ctxt.gregs[i] = 0;
+	for (int i = 0; i < 6; i++)
+		cpu_ctxt.sregs[i] = 0;
+	for (int i = 0; i < 5; i++)
+		cpu_ctxt.cregs[i] = 0;
+	cpu_ctxt.gdtr.size = 0;
+	cpu_ctxt.gdtr.address = 0;
+	cpu_ctxt.idtr.size = 0;
+	cpu_ctxt.idtr.address = 0;
+	cpu_ctxt.efer = 0;
+
+	cpu_ctxt.cpu_mode = REAL_MODE;
 	cpu_ctxt.cs = ap_start_vector << 8;
 	cpu_ctxt.eflags = 2;
 
 next_instr:
+	instr_cnt++;
 	prefixes = 0;
-	instr_emulated++;
 	cpu_ctxt.eip += instr_len;
 	if (cpu_ctxt.cpu_mode == REAL_MODE)
 		instr_start = (unsigned char *)((unsigned long)(cpu_ctxt.cs << 4) + cpu_ctxt.eip);
 	else
 		instr_start = (unsigned char *)(unsigned long)cpu_ctxt.eip;
-	pr_info("emulate instruction @ 0x%lx\n", (unsigned long)instr_start);
 	instr_len = 0;
+
+	asm volatile("vmcall"
+		     : : "a"(13), "b"(0), "c"(instr_cnt), "d"((unsigned long)instr_start)
+		     : "memory");
 
 next_byte:
 	// XXX: should check if instr_start + instr_len is still within code segment.
@@ -159,30 +172,30 @@ next_byte:
 				instr_len += 2;
 				disp16 += cpu_ctxt.ds << 4;
 			} else {
-				pr_info("unrecognized instruction 0x%02x\n", b);
+				//pr_info("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 			if (reg == 2) {
 				dtr = &cpu_ctxt.gdtr;
-				pr_info("lgdt from 0x%lx\n", disp16);
+				//pr_info("lgdt from 0x%lx\n", disp16);
 			}
 			if (reg == 3) {
 				dtr = &cpu_ctxt.idtr;
-				pr_info("lidt from 0x%lx\n", disp16);
+				//pr_info("lidt from 0x%lx\n", disp16);
 			}
 			dtr->size = *(unsigned short *)(unsigned long)disp16;
-			pr_info("size 0x%x\n", dtr->size);
+			//pr_info("size 0x%x\n", dtr->size);
 			if (cpu_ctxt.cpu_mode == REAL_MODE && prefixes & PREFIX_DATA) {
 				dtr->address = *(unsigned int *)(unsigned long)(disp16 + 2);
-				pr_info("address 0x%x\n", dtr->address);
+				//pr_info("address 0x%x\n", dtr->address);
 			} else {
-				pr_info("unrecognized instruction 0x%02x\n", b);
+				//pr_info("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 			goto next_instr;
 		}
 		case 0x09: // wbinvd
-			pr_info("wbinvd\n");
+			//pr_info("wbinvd\n");
 			goto next_instr;
 		case 0x22: { // mov greg ==> cr
 			unsigned char modrm = *(instr_start + instr_len++);
@@ -191,9 +204,9 @@ next_byte:
 			if (mod == 3) {
 				unsigned int *dst = get_creg_addr(&cpu_ctxt, reg);
 				*dst = get_greg(&cpu_ctxt, modrm & 0x7);
-				pr_info("mov to cr%d: 0x%x\n", reg, get_creg(&cpu_ctxt, reg));
+				//pr_info("mov to cr%d: 0x%x\n", reg, get_creg(&cpu_ctxt, reg));
 			} else {
-				pr_info("unrecognized instruction 0x%02x\n", b);
+				//pr_info("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 			goto next_instr;
@@ -201,10 +214,10 @@ next_byte:
 		case 0x30: { // wrmsr
 			if (cpu_ctxt.ecx == MSR_EFER) {
 				cpu_ctxt.efer = (unsigned long)cpu_ctxt.edx << 32 | cpu_ctxt.eax;
-				pr_info("wrmsr 0x%x: 0x%x : 0x%x ==> 0x%lx\n",
-					cpu_ctxt.ecx, cpu_ctxt.eax, cpu_ctxt.edx, cpu_ctxt.efer);
+				//pr_info("wrmsr 0x%x: 0x%x : 0x%x ==> 0x%lx\n",
+				//	cpu_ctxt.ecx, cpu_ctxt.eax, cpu_ctxt.edx, cpu_ctxt.efer);
 			} else {
-				pr_info("unrecognized MSR 0x%x\n", cpu_ctxt.ecx);
+				//pr_info("unrecognized MSR 0x%x\n", cpu_ctxt.ecx);
 			}
 			goto next_instr;
 		}
@@ -212,10 +225,10 @@ next_byte:
 			if (cpu_ctxt.ecx == MSR_EFER) {
 				cpu_ctxt.eax = (unsigned int)cpu_ctxt.efer;
 				cpu_ctxt.edx = (unsigned int)(cpu_ctxt.efer >> 32);
-				pr_info("rdmsr 0x%x: 0x%lx ==> 0x%x : 0x%x\n",
-					cpu_ctxt.ecx, cpu_ctxt.efer, cpu_ctxt.eax, cpu_ctxt.edx);
+				//pr_info("rdmsr 0x%x: 0x%lx ==> 0x%x : 0x%x\n",
+				//	cpu_ctxt.ecx, cpu_ctxt.efer, cpu_ctxt.eax, cpu_ctxt.edx);
 			} else {
-				pr_info("unrecognized MSR 0x%x\n", cpu_ctxt.ecx);
+				//pr_info("unrecognized MSR 0x%x\n", cpu_ctxt.ecx);
 			}
 			goto next_instr;
 		}
@@ -234,15 +247,15 @@ next_byte:
 				else
 					cpu_ctxt.eflags &= ~X86_EFLAGS_CF;
 				instr_len++;
-				pr_info("bt: 0x%x @ 0x%x, offset 0x%x\n", value, disp32, bit_offset);
+				//pr_info("bt: 0x%x @ 0x%x, offset 0x%x\n", value, disp32, bit_offset);
 			} else {
-				pr_info("unrecognized instruction 0x%02x\n", b);
+				//pr_info("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 			goto next_instr;
 		}
 		default:
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 		}
 		break;
 	case 0x3b: { // cmp
@@ -259,7 +272,7 @@ next_byte:
 			else
 				cpu_ctxt.eflags &= ~X86_EFLAGS_ZF;
 			instr_len += 4;
-			pr_info("cmp: 0x%x @ 0x%x with greg%d 0x%x\n", m, moffset, reg, greg);
+			//pr_info("cmp: 0x%x @ 0x%x with greg%d 0x%x\n", m, moffset, reg, greg);
 		}
 		goto next_instr;
 	}
@@ -274,20 +287,20 @@ next_byte:
 			instr_len++;
 			instr_len += offset;
 		}
-		pr_info("jae\n");
+		//pr_info("jae\n");
 		goto next_instr;
 	case 0x74: { // je
 		char offset = *(char *)(instr_start + instr_len++);
 		if (cpu_ctxt.eflags & X86_EFLAGS_ZF)
 			instr_len += offset;
-		pr_info("je\n");
+		//pr_info("je\n");
 		goto next_instr;
 	}
 	case 0x75: { // jne
 		char offset = *(char *)(instr_start + instr_len++);
 		if (!(cpu_ctxt.eflags & X86_EFLAGS_ZF))
 			instr_len += offset;
-		pr_info("jne\n");
+		//pr_info("jne\n");
 		goto next_instr;
 	}
 	case 0x81: { // add
@@ -298,9 +311,9 @@ next_byte:
 			int *dst = get_greg_addr(&cpu_ctxt, modrm & 0x7);
 			*dst += imm32;
 			instr_len += 4;
-			pr_info("add %x to reg%d: %x\n", imm32, modrm & 0x7, get_greg(&cpu_ctxt, modrm & 0x7));
+			//pr_info("add %x to reg%d: %x\n", imm32, modrm & 0x7, get_greg(&cpu_ctxt, modrm & 0x7));
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
@@ -310,7 +323,7 @@ next_byte:
 		unsigned char reg = (modrm >> 3) & 7;
 		unsigned char mod = (modrm >> 6) & 3;
 		if (mod != 3) {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		cpu_ctxt.eflags &= ~X86_EFLAGS_CF;
@@ -328,7 +341,7 @@ next_byte:
 				cpu_ctxt.eflags |= X86_EFLAGS_SF;
 			else
 				cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
-			pr_info("test 0x%x : 0x%x\n", a, b);
+			//pr_info("test 0x%x : 0x%x\n", a, b);
 		} else if ((cpu_ctxt.cpu_mode == PROTECTED_MODE_32 && prefixes & PREFIX_DATA) ||
 		    cpu_ctxt.cpu_mode == REAL_MODE) {
 			unsigned short a = get_greg(&cpu_ctxt, modrm & 0x7);
@@ -342,7 +355,7 @@ next_byte:
 				cpu_ctxt.eflags |= X86_EFLAGS_SF;
 			else
 				cpu_ctxt.eflags &= ~X86_EFLAGS_SF;
-			pr_info("test 0x%x : 0x%x\n", a, b);
+			//pr_info("test 0x%x : 0x%x\n", a, b);
 		}
 		goto next_instr;
 	}
@@ -353,12 +366,12 @@ next_byte:
 		if (mod == 0 && (modrm & 7) == 5) {
 			unsigned int *dst = get_greg_addr(&cpu_ctxt, reg);
 			unsigned int moffset = *(unsigned int *)(instr_start + instr_len);
-			pr_info("before mov [%x] ==> greg%d %x\n", moffset, reg, cpu_ctxt.gregs[reg]);
+			//pr_info("before mov [%x] ==> greg%d %x\n", moffset, reg, cpu_ctxt.gregs[reg]);
 			*dst = *(unsigned int *)(unsigned long)moffset;
-			pr_info("after mov [%x] ==> greg%d %x\n", moffset, reg, cpu_ctxt.gregs[reg]);
+			//pr_info("after mov [%x] ==> greg%d %x\n", moffset, reg, cpu_ctxt.gregs[reg]);
 			instr_len += 4;
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
@@ -371,13 +384,13 @@ next_byte:
 			if (mod == 3) {
 				unsigned short *dst = get_greg_addr(&cpu_ctxt, modrm & 0x7);
 				*dst = get_sreg(&cpu_ctxt, reg);
-				pr_info("mov sreg ==> greg: 0x%x\n", get_greg(&cpu_ctxt, modrm & 0x7));
+				//pr_info("mov sreg ==> greg: 0x%x\n", get_greg(&cpu_ctxt, modrm & 0x7));
 			} else {
-				pr_info("unrecognized instruction 0x%02x\n", b);
+				//pr_info("unrecognized instruction 0x%02x\n", b);
 				break;
 			}
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
@@ -388,9 +401,9 @@ next_byte:
 		if (mod == 3) {
 			unsigned short *dst = get_sreg_addr(&cpu_ctxt, reg);
 			*dst = (unsigned short)get_greg(&cpu_ctxt, modrm & 0x7);
-			pr_info("mov greg ==> sreg%d: 0x%x\n", reg, get_sreg(&cpu_ctxt, reg));
+			//pr_info("mov greg ==> sreg%d: 0x%x\n", reg, get_sreg(&cpu_ctxt, reg));
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
@@ -398,9 +411,9 @@ next_byte:
 	case 0xa1: { // mov [moffset] ==> eax
 		unsigned int *dst = get_greg_addr(&cpu_ctxt, 0);
 		unsigned int moffset = *(unsigned int *)(instr_start + instr_len);
-		pr_info("before mov [%x] ==> eax %x\n", moffset, cpu_ctxt.eax);
+		//pr_info("before mov [%x] ==> eax %x\n", moffset, cpu_ctxt.eax);
 		*dst = *(unsigned int *)(unsigned long)moffset;
-		pr_info("after mov [%x] ==> eax %x\n", moffset, cpu_ctxt.eax);
+		//pr_info("after mov [%x] ==> eax %x\n", moffset, cpu_ctxt.eax);
 		instr_len += 4;
 		goto next_instr;
 	}
@@ -410,27 +423,27 @@ next_byte:
 			unsigned int *dst = get_greg_addr(&cpu_ctxt, b & 7);
 			*dst = *(unsigned int *)(instr_start + instr_len);
 			instr_len += 4;
-			pr_info("mov imm ==> greg%d: 0x%x\n", b & 7, get_greg(&cpu_ctxt, b & 7));
+			//pr_info("mov imm ==> greg%d: 0x%x\n", b & 7, get_greg(&cpu_ctxt, b & 7));
 		} else if ((cpu_ctxt.cpu_mode == PROTECTED_MODE_32 && prefixes & PREFIX_DATA) ||
 		    cpu_ctxt.cpu_mode == REAL_MODE) {
 			unsigned short *dst = get_greg_addr(&cpu_ctxt, b & 7);
 			*dst = *(unsigned short *)(instr_start + instr_len);
 			instr_len += 2;
-			pr_info("mov imm ==> greg%d: 0x%x\n", b & 7, get_greg(&cpu_ctxt, b & 7));
+			//pr_info("mov imm ==> greg%d: 0x%x\n", b & 7, get_greg(&cpu_ctxt, b & 7));
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
 	case 0xe8: // call
 		if (cpu_ctxt.cpu_mode == REAL_MODE) {
-			short offset = *(short *)(instr_start + instr_len);
+			//short offset = *(short *)(instr_start + instr_len);
 			instr_len += 2;
 			//instr_len += offset; // just skip for now
-			pr_info("call: 0x%lx\n", (unsigned long)instr_start + instr_len + offset);
+			//pr_info("call: 0x%lx\n", (unsigned long)instr_start + instr_len + offset);
 			cpu_ctxt.eax = 0; // hack to skip verify_cpu
 		} else {
-			pr_info("unrecognized instruction 0x%02x\n", b);
+			//pr_info("unrecognized instruction 0x%02x\n", b);
 			break;
 		}
 		goto next_instr;
@@ -446,7 +459,7 @@ next_byte:
 		}
 		cpu_ctxt.cs = *(unsigned short *)(instr_start + instr_len);
 		instr_len = 0;
-		pr_info("ljmp 0x%04x:0x%08x\n", cpu_ctxt.cs, cpu_ctxt.eip);
+		//pr_info("ljmp 0x%04x:0x%08x\n", cpu_ctxt.cs, cpu_ctxt.eip);
 
 		if (cpu_ctxt.cr0 & X86_CR0_PE)
 			cpu_ctxt.cpu_mode = PROTECTED_MODE_32;
@@ -496,33 +509,37 @@ next_byte:
 		}
 		goto next_instr;
 	case 0xf4: // halt
-		pr_info("unrecognized instruction 0x%02x\n", b);
+		//pr_info("unrecognized instruction 0x%02x\n", b);
 		break;
 	case 0xfa: // cli
 		cpu_ctxt.eflags &= ~X86_EFLAGS_IF;
-		pr_info("cli\n");
+		//pr_info("cli\n");
 		goto next_instr;
 	case 0xfb: // sti
 		cpu_ctxt.eflags |= X86_EFLAGS_IF;
-		pr_info("sti\n");
+		//pr_info("sti\n");
 		goto next_instr;
 	default:
-		pr_info("unrecognized instruction 0x%02x\n", b);
+		//pr_info("unrecognized instruction 0x%02x\n", b);
 		break;
 	}
 }
 
+static void *l4e_va;
+
 static int __init nonlm_emulator_init(void)
 {
-	unsigned long cr3;
+	struct page *page;
 	unsigned long *current_l4e_va;
 	void *l3e_va;
+	unsigned long pa, cr3;
 
-	page = __alloc_pages_node(cpu_to_node(0), GFP_ATOMIC, 2);
+	page = alloc_pages_node(NUMA_NO_NODE, GFP_ATOMIC, 2);
 	if (!page) {
 		pr_info("unable to allocate memory\n");
 		return -1;
 	}
+
 	l4e_va = page_address(page);
 	memset(l4e_va, 0, PAGE_SIZE << 2);
 
@@ -536,16 +553,19 @@ static int __init nonlm_emulator_init(void)
 		((unsigned long *)l3e_va)[i] = i << 30 | 0x1a3;
 	((unsigned long *)l4e_va)[0] =  __pa(l3e_va) | 0x23;
 
+	current_l4e_va[1] = __pa(l4e_va) | 0x23;
+	pa = *(unsigned long *)((((unsigned long)&emulate & 0x0000ffffffffffffUL) >> 9) | (1UL << 39));
+	pa &= 0xfffffffffffff000UL;
 	asm volatile("vmcall"
-//		     : : "a"(13), "b"(__pa(&emulate)), "c"(__pa(l4e_va) | (cr3 & 0xfff))
-		     : : "a"(13), "b"((unsigned long)&emulate), "c"(__pa(l4e_va) | (cr3 & 0xfff))
+		     : : "a"(13), "b"(__pa(l4e_va) | (cr3 & 0xfff)), "c"(pa)
 		     : "memory");
-	pr_info("emulator loaded @0x%lx\n", __pa(&emulate));
+	pr_info("emulator loaded @0x%lx\n", pa);
 	return 0;
 }
 
 static void __exit nonlm_emulator_exit(void)
 {
+	free_pages((unsigned long)l4e_va, 2);
 	pr_info("emulator unloaded\n");
 }
 
