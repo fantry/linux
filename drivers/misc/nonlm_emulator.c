@@ -471,11 +471,10 @@ next_byte:
 			asm volatile("mov %0,%%cr0" : : "r" (v) : "memory");
 			v = cpu_ctxt.cr4;
 			asm volatile("mov %0,%%cr4" : : "r" (v) : "memory");
-			wrmsrl(MSR_EFER, cpu_ctxt.efer);
-#if 0
 			v = cpu_ctxt.cr3;
 			asm volatile("mov %0,%%cr3" : : "r" (v) : "memory");
-#endif
+			wrmsrl(MSR_EFER, cpu_ctxt.efer);
+
 			v = cpu_ctxt.ds;
 			asm volatile("mov %0,%%ds" : : "r" (v));
 			v = cpu_ctxt.es;
