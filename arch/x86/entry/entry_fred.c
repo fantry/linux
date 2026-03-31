@@ -79,6 +79,18 @@ static __always_inline void fred_other(struct pt_regs *regs)
 {
 	/* The compiler can fold these conditions into a single test */
 	if (likely(regs->fred_ss.vector == FRED_SYSCALL && regs->fred_ss.l)) {
+		/*
+		 * FRED-based SYSCALL does not natively clobber RCX and R11. To
+		 * maintain architectural consistency with the legacy IDT-based
+		 * ABI, manually emulate the clobbering behavior by saving RFLAGS
+		 * to RCX and the return IP to R11.
+		 *
+		 * Note: Given that this is a critical hot path, any concerns
+		 * about the performance overhead of this emulation?
+		 */
+		regs->cx = regs->flags;
+		regs->r11 = regs->ip;
+
 		regs->orig_ax = regs->ax;
 		regs->ax = -ENOSYS;
 		do_syscall_64(regs, regs->orig_ax);
